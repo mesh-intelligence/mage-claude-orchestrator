@@ -45,6 +45,11 @@ requirements:
       - R1.22: Config must include GenerationBranch (string) for explicit branch selection
       - R1.23: Config must include TokenFile (string) for a credential file override in SecretsDir
       - R1.24: All Config fields must have YAML struct tags using snake_case names
+      - R1.25: Config must include EstimatedLinesMin (int, default 250) for the minimum estimated lines per task
+      - R1.26: Config must include EstimatedLinesMax (int, default 350) for the maximum estimated lines per task
+      - R1.27: Config must include CleanupDirs ([]string) listing directories to remove after generation stop or reset
+      - R1.28: Config must include PodmanImage (string, required) for the container image used for Claude execution
+      - R1.29: Config must include PodmanArgs ([]string) for additional arguments passed to podman run
 
   R2:
     title: Constructor and Defaults
@@ -60,6 +65,8 @@ requirements:
       - R2.9: applyDefaults must set ClaudeArgs to defaultClaudeArgs when empty
       - R2.10: applyDefaults must set MaxIssues to 10 when zero
       - R2.11: applyDefaults must set Cycles to 1 when zero
+      - R2.12: applyDefaults must set EstimatedLinesMin to 250 when zero
+      - R2.13: applyDefaults must set EstimatedLinesMax to 350 when zero
 
   R3:
     title: Logging

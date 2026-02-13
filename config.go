@@ -96,6 +96,57 @@ type Config struct {
 	// TokenFile overrides the credential filename in SecretsDir.
 	// If empty, DefaultTokenFile is used.
 	TokenFile string `yaml:"token_file"`
+
+	// EstimatedLinesMin is the minimum estimated lines per task (default 250).
+	// Passed to the measure prompt template as LinesMin.
+	EstimatedLinesMin int `yaml:"estimated_lines_min"`
+
+	// EstimatedLinesMax is the maximum estimated lines per task (default 350).
+	// Passed to the measure prompt template as LinesMax.
+	EstimatedLinesMax int `yaml:"estimated_lines_max"`
+
+	// CleanupDirs lists directories to remove after generation stop or reset.
+	// Empty by default.
+	CleanupDirs []string `yaml:"cleanup_dirs"`
+
+	// PodmanImage is the container image for Claude execution (required).
+	// Claude runs inside a podman container for isolation.
+	PodmanImage string `yaml:"podman_image"`
+
+	// PodmanArgs are additional arguments passed to podman run before the image name.
+	PodmanArgs []string `yaml:"podman_args"`
+}
+
+// DefaultConfigFile is the conventional configuration filename.
+const DefaultConfigFile = "configuration.yaml"
+
+// DefaultConfig returns a Config populated with all default values.
+// Project-specific fields (ModulePath, BinaryName, etc.) are left empty;
+// the caller fills them in or the user edits the generated file.
+func DefaultConfig() Config {
+	t := true
+	cfg := Config{
+		SilenceAgent: &t,
+	}
+	cfg.applyDefaults()
+	return cfg
+}
+
+// WriteDefaultConfig writes a configuration.yaml at the given path
+// with all defaults filled in. Returns an error if the file already exists.
+func WriteDefaultConfig(path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("%s already exists", path)
+	}
+
+	cfg := DefaultConfig()
+	data, err := yaml.Marshal(&cfg)
+	if err != nil {
+		return fmt.Errorf("marshalling default config: %w", err)
+	}
+
+	header := "# Orchestrator configuration — edit fields below.\n# See docs/ARCHITECTURE.md for field descriptions.\n\n"
+	return os.WriteFile(path, append([]byte(header), data...), 0o644)
 }
 
 // SeedData is the template data passed to SeedFiles templates.
@@ -152,6 +203,12 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Cycles == 0 {
 		c.Cycles = 1
+	}
+	if c.EstimatedLinesMin == 0 {
+		c.EstimatedLinesMin = 250
+	}
+	if c.EstimatedLinesMax == 0 {
+		c.EstimatedLinesMax = 350
 	}
 }
 

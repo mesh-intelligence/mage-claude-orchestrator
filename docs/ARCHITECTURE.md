@@ -4,7 +4,7 @@
 
 Mage Claude Orchestrator is a Go library that automates AI-driven code generation through a two-phase loop: measure (propose tasks) and stitch (execute tasks in isolated worktrees). Consuming projects import the library, configure it with project-specific paths and templates, and expose its methods as Mage targets.
 
-The system operates as build tooling, not a standalone application. An `Orchestrator` struct holds a `Config` and provides methods that Mage calls as targets. These methods coordinate four subsystems: git branch management, Claude invocation (direct binary), issue tracking (beads), and metrics collection.
+The system operates as build tooling, not a standalone application. An `Orchestrator` struct holds a `Config` and provides methods that Mage calls as targets. These methods coordinate four subsystems: git branch management, Claude invocation (containerized via podman), issue tracking (beads), and metrics collection.
 
 |  |
 |:--:|
@@ -115,6 +115,11 @@ Table 1 Config Fields
 | UserPrompt | string | user_prompt | "" | Additional context for the measure prompt |
 | GenerationBranch | string | generation_branch | "" | Explicit branch to work on (auto-detect if empty) |
 | TokenFile | string | token_file | DefaultTokenFile | Credential file override in SecretsDir |
+| EstimatedLinesMin | int | estimated_lines_min | 250 | Minimum estimated lines per task |
+| EstimatedLinesMax | int | estimated_lines_max | 350 | Maximum estimated lines per task |
+| CleanupDirs | []string | cleanup_dirs | [] | Directories to remove after generation stop or reset |
+| PodmanImage | string | podman_image | (required) | Container image for Claude execution |
+| PodmanArgs | []string | podman_args | [] | Additional arguments passed to podman run |
 
 `LoadConfig(path)` reads the YAML file, resolves SeedFiles values (file paths to template content), resolves MeasurePrompt/StitchPrompt (file paths to template content), and applies defaults. SilenceAgent uses a `*bool` to distinguish "not set in YAML" (nil, defaults to true) from "explicitly set to false".
 
@@ -148,7 +153,7 @@ Table 3 Template Data Types
 
 | Template | Data Type | Fields |
 |----------|-----------|--------|
-| Measure | MeasurePromptData | ExistingIssues (JSON string), Limit (int), OutputPath (string), UserInput (string) |
+| Measure | MeasurePromptData | ExistingIssues (JSON string), Limit (int), OutputPath (string), UserInput (string), LinesMin (int), LinesMax (int) |
 | Stitch | StitchPromptData | Title, ID, IssueType, Description (all strings) |
 
 ### Metrics
@@ -195,7 +200,7 @@ Table 4 InvocationRecord Fields
 
 **Decision 3: Two-phase cobbler loop.** We separate task proposal (measure) from task execution (stitch). This allows measure to see the full project state before proposing work, and stitch to execute tasks independently. Alternative: a single-phase approach where Claude both proposes and executes loses the ability to review proposed tasks before execution.
 
-**Decision 4: Direct Claude execution.** We run Claude as a local binary via the `claude` CLI. The orchestrator passes a prompt on stdin and captures stdout for token parsing. This keeps the dependency footprint minimal and avoids container runtime requirements. Alternative: container-based execution adds isolation but increases setup complexity and is not needed for local development workflows.
+**Decision 4: Container-isolated Claude execution.** We run Claude inside a podman container. The orchestrator wraps every invocation with `podman run`, mounting the working directory at the same path inside the container so absolute paths in prompts resolve correctly. A pre-flight check verifies that podman is installed, the configured image is available, and containers can start before any workflow begins. This isolates Claude from the host environment and makes builds reproducible across machines. Alternative: running Claude as a bare binary on the host is simpler but provides no isolation and makes environment differences harder to debug.
 
 **Decision 5: Beads for issue tracking.** We use the beads git-backed issue tracker because it stores issues as JSONL files tracked by git. This means task state travels with the generation branch and is recoverable from any commit. Alternative: external issue trackers (GitHub Issues, Jira) require network access and do not travel with the branch.
 
@@ -214,6 +219,7 @@ Table 5 Technology Choices
 | Version control | git (worktrees, tags, branches) | Isolation, lifecycle tracking, merge |
 | Issue tracking | Beads (bd CLI) | Git-backed task management via JSONL |
 | AI execution | Claude Code (CLI) | Code generation and task execution |
+| Container runtime | Podman | Isolates Claude execution in containers |
 | Prompt templating | Go text/template | Parameterized prompts |
 | YAML parsing | gopkg.in/yaml.v3 | Configuration file parsing |
 

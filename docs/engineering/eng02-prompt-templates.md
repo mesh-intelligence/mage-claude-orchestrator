@@ -31,6 +31,8 @@ Table 2 MeasurePromptData Fields
 | Limit | int | Config.MaxIssues |
 | OutputPath | string | Computed file path in Config.CobblerDir |
 | UserInput | string | Config.UserPrompt |
+| LinesMin | int | Config.EstimatedLinesMin |
+| LinesMax | int | Config.EstimatedLinesMax |
 
 The measure template receives a JSON string of existing issues. We render it inline in the prompt so Claude sees the full issue tracker state. The Limit field tells Claude how many tasks to propose. The OutputPath is where Claude writes its JSON response.
 

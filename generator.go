@@ -235,6 +235,8 @@ func (o *Orchestrator) GeneratorStop() error {
 		return err
 	}
 
+	o.cleanupDirs()
+
 	logf("generator:stop: done, work is on main")
 	return nil
 }
@@ -530,6 +532,7 @@ func (o *Orchestrator) GeneratorReset() error {
 		os.RemoveAll(dir)
 	}
 	os.RemoveAll(o.cfg.BinaryDir + "/")
+	o.cleanupDirs()
 
 	logf("generator:reset: seeding Go sources and reinitializing go.mod")
 	if err := o.seedFiles("main"); err != nil {
@@ -645,6 +648,25 @@ func removeEmptyDirs(root string) {
 			os.Remove(dirs[i])
 		}
 	}
+}
+
+// cleanupDirs removes all directories listed in Config.CleanupDirs.
+func (o *Orchestrator) cleanupDirs() {
+	for _, dir := range o.cfg.CleanupDirs {
+		logf("cleanupDirs: removing %s", dir)
+		os.RemoveAll(dir)
+	}
+}
+
+// GeneratorInit writes a default configuration.yaml if one does not exist.
+// Exposed as mage generator:init.
+func GeneratorInit() error {
+	logf("generator:init: writing %s", DefaultConfigFile)
+	if err := WriteDefaultConfig(DefaultConfigFile); err != nil {
+		return err
+	}
+	logf("generator:init: created %s — edit project-specific fields before running", DefaultConfigFile)
+	return nil
 }
 
 // Init initializes the project (beads).

@@ -18,6 +18,7 @@ const (
 	binClaude = "claude"
 	binGo     = "go"
 	binLint   = "golangci-lint"
+	binPodman = "podman"
 )
 
 // defaultClaudeArgs are the CLI arguments for automated Claude execution.

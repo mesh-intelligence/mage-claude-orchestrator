@@ -30,6 +30,10 @@ func (o *Orchestrator) RunStitch() error {
 	logf("stitch: starting")
 	o.logConfig("stitch")
 
+	if err := o.checkPodman(); err != nil {
+		return err
+	}
+
 	if err := o.requireBeads(); err != nil {
 		logf("stitch: beads not initialized: %v", err)
 		return err

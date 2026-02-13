@@ -75,15 +75,18 @@ requirements:
       - R5.3: Custom templates from Config must override the embedded defaults
       - R5.4: MeasurePromptData must provide ExistingIssues, Limit, OutputPath, and UserInput
       - R5.5: StitchPromptData must provide Title, ID, IssueType, and Description
+      - R5.6: MeasurePromptData must provide LinesMin and LinesMax from Config.EstimatedLinesMin and Config.EstimatedLinesMax
 
   R6:
     title: Claude Invocation
     items:
-      - R6.1: runClaude must execute the claude binary directly with the prompt on stdin
-      - R6.2: runClaude must set the working directory when a worktree path is provided
-      - R6.3: runClaude must capture stdout for token parsing
-      - R6.4: parseClaudeTokens must extract input and output token counts from stream-json output
-      - R6.5: When silence is false, Claude stdout must be tee'd to both buffer and os.Stdout
+      - R6.1: runClaude must execute the claude binary inside a podman container with the prompt on stdin
+      - R6.2: runClaude must mount the working directory into the container at the same path using -v mountDir:mountDir
+      - R6.3: runClaude must set the container working directory using podman -w when a worktree path is provided
+      - R6.4: runClaude must capture stdout for token parsing
+      - R6.5: parseClaudeTokens must extract input and output token counts from stream-json output
+      - R6.6: When silence is false, Claude stdout must be tee'd to both buffer and os.Stdout
+      - R6.7: runClaude must pass Config.PodmanArgs before the image name and Config.ClaudeArgs after the claude binary
 
   R7:
     title: Issue Import
@@ -92,6 +95,16 @@ requirements:
       - R7.2: importIssues must create tasks in beads for each proposed issue
       - R7.3: importIssues must wire dependencies using bd dep add for issues with dependency >= 0
       - R7.4: importIssues must commit beads changes after successful import
+
+  R8:
+    title: Pre-flight Checks
+    items:
+      - R8.1: checkPodman must verify Config.PodmanImage is not empty
+      - R8.2: checkPodman must verify the podman binary is on PATH
+      - R8.3: checkPodman must verify a container can start using the configured PodmanImage
+      - R8.4: checkPodman must return an error with a README reference when any check fails
+      - R8.5: RunMeasure must call checkPodman before any other work
+      - R8.6: RunStitch must call checkPodman before any other work
 
 non_goals:
   - This PRD does not define the generation lifecycle (see prd002)

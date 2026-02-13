@@ -6,6 +6,7 @@ package orchestrator
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -99,15 +100,49 @@ func parseClaudeTokens(output []byte) ClaudeResult {
 	return ClaudeResult{}
 }
 
-// runClaude executes Claude with the given prompt and returns token usage.
+// checkPodman verifies that podman is available and can start containers.
+// Returns a descriptive error with README instructions if any check fails.
+func (o *Orchestrator) checkPodman() error {
+	if o.cfg.PodmanImage == "" {
+		return fmt.Errorf("podman_image required in configuration.yaml; see README.md")
+	}
+	if _, err := exec.LookPath(binPodman); err != nil {
+		return fmt.Errorf("podman not found on PATH; see README.md")
+	}
+	out, err := exec.Command(binPodman, "run", "--rm", o.cfg.PodmanImage, "echo", "ok").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("podman cannot start containers: %s\n%s\nSee README.md for setup instructions", err, string(out))
+	}
+	return nil
+}
+
+// runClaude executes Claude inside a podman container and returns token usage.
 func (o *Orchestrator) runClaude(prompt, dir string, silence bool) (ClaudeResult, error) {
 	logf("runClaude: promptLen=%d dir=%q silence=%v", len(prompt), dir, silence)
-	logf("runClaude: exec %s %v", binClaude, o.cfg.ClaudeArgs)
-	cmd := exec.Command(binClaude, o.cfg.ClaudeArgs...)
-	cmd.Stdin = strings.NewReader(prompt)
-	if dir != "" {
-		cmd.Dir = dir
+
+	// Determine the host directory to mount into the container.
+	mountDir := dir
+	if mountDir == "" {
+		var err error
+		mountDir, err = os.Getwd()
+		if err != nil {
+			return ClaudeResult{}, fmt.Errorf("getting working directory: %w", err)
+		}
 	}
+
+	// podman run --rm -i -v host:host -w host [PodmanArgs...] image claude [ClaudeArgs...]
+	args := []string{"run", "--rm", "-i",
+		"-v", mountDir + ":" + mountDir,
+		"-w", mountDir,
+	}
+	args = append(args, o.cfg.PodmanArgs...)
+	args = append(args, o.cfg.PodmanImage)
+	args = append(args, binClaude)
+	args = append(args, o.cfg.ClaudeArgs...)
+
+	logf("runClaude: exec %s %v", binPodman, args)
+	cmd := exec.Command(binPodman, args...)
+	cmd.Stdin = strings.NewReader(prompt)
 
 	var stdoutBuf bytes.Buffer
 	if silence {

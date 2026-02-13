@@ -31,6 +31,5 @@ success_criteria:
 out_of_scope:
   - Generation lifecycle operations (see rel01.0-uc002)
   - Measure and stitch workflows (see rel01.0-uc003, rel01.0-uc004)
-  - Container setup (see rel02.0-uc001)
 
 test_suite: test-rel01.0-uc001-orchestrator-initialization

@@ -35,6 +35,5 @@ success_criteria:
 out_of_scope:
   - Content of measure and stitch workflows (see rel01.0-uc003, rel01.0-uc004)
   - Recovery from interrupted runs (see rel01.0-uc005)
-  - Container execution details (see rel02.0-uc001)
 
 test_suite: test-rel01.0-uc002-generation-lifecycle

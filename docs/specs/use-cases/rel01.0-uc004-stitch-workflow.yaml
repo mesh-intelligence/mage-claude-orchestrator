@@ -45,6 +45,5 @@ success_criteria:
 out_of_scope:
   - Claude behavior and code quality (we test the workflow, not Claude output)
   - Task proposal (see rel01.0-uc003)
-  - Container execution details (see rel02.0-uc001)
 
 test_suite: test-rel01.0-uc004-stitch-workflow

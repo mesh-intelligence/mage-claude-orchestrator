@@ -70,7 +70,7 @@ test_cases:
 
   - name: Resume drains ready issues before new cycles
     inputs:
-      command: mage generator:resume --cycles 1 --no-container --max-issues 1
+      command: mage generator:resume --cycles 1 --max-issues 1
     expected:
       exit_code: 0
 

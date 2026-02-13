@@ -24,7 +24,6 @@ requirements:
       - R1.3: CobblerConfig must include UserPrompt (string) for additional context
       - R1.4: CobblerConfig must include GenerationBranch (string) for explicit branch selection
       - R1.5: CobblerConfig must include TokenFile (string) for the credential filename
-      - R1.6: CobblerConfig must include NoContainer (bool) to skip container execution
 
   R2:
     title: Measure Workflow
@@ -82,12 +81,11 @@ requirements:
   R6:
     title: Claude Invocation
     items:
-      - R6.1: runClaude must attempt container execution first (podman then docker)
-      - R6.2: runClaude must fall back to direct claude binary when no container is available
-      - R6.3: runClaude must skip container when NoContainer is true
-      - R6.4: runClaude must capture stdout for token parsing
-      - R6.5: parseClaudeTokens must extract input and output token counts from stream-json output
-      - R6.6: When silence is false, Claude stdout must be tee'd to both buffer and os.Stdout
+      - R6.1: runClaude must execute the claude binary directly with the prompt on stdin
+      - R6.2: runClaude must set the working directory when a worktree path is provided
+      - R6.3: runClaude must capture stdout for token parsing
+      - R6.4: parseClaudeTokens must extract input and output token counts from stream-json output
+      - R6.5: When silence is false, Claude stdout must be tee'd to both buffer and os.Stdout
 
   R7:
     title: Issue Import
@@ -99,7 +97,6 @@ requirements:
 
 non_goals:
   - This PRD does not define the generation lifecycle (see prd002)
-  - This PRD does not define container runtime detection or image building (see prd004)
   - This PRD does not define the prompt content or Claude behavior expectations
   - This PRD does not define concurrent task execution (tasks run sequentially)
 

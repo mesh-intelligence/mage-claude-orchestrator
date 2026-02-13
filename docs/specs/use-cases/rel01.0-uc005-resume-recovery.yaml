@@ -38,7 +38,6 @@ success_criteria:
 
 out_of_scope:
   - Initial generation start (see rel01.0-uc002)
-  - Container execution details (see rel02.0-uc001)
   - Multiple concurrent generations (one at a time)
 
 test_suite: test-rel01.0-uc005-resume-recovery

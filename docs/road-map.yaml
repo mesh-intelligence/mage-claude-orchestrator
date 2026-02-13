@@ -27,18 +27,6 @@ releases:
         summary: Generation resume with stale task recovery
         status: done
 
-  - version: "02.0"
-    name: Container Execution and Metrics
-    status: done
-    description: |
-      Container runtime detection, image building, container-based
-      Claude execution with direct fallback, and structured metrics
-      collection (InvocationRecords, LOC snapshots, diff stats).
-    use_cases:
-      - id: rel02.0-uc001-container-execution
-        summary: Container runtime detection, image building, isolated Claude execution
-        status: done
-
   - version: "99.0"
     name: Unscheduled
     status: not started

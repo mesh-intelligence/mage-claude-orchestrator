@@ -22,7 +22,7 @@ The **stitch** phase executes ready tasks. For each task, we create a git worktr
 
 The **generation** lifecycle wraps multiple measure-stitch cycles. A generation starts by tagging the current main state, creating a generation branch, and resetting Go sources to a clean state. Cycles of measure and stitch build up the codebase on the generation branch. When the generation is complete, we merge it back to main, tag the result, and clean up.
 
-Consuming projects import the orchestrator as a Go library and expose its methods as Mage targets. A project configures its module path, source directories, seed files, and prompt templates. The orchestrator handles everything else: git branch management, worktree isolation, Claude invocation (via container or direct binary), issue tracking, and metrics collection.
+Consuming projects import the orchestrator as a Go library and expose its methods as Mage targets. A project configures its module path, source directories, seed files, and prompt templates. The orchestrator handles everything else: git branch management, worktree isolation, Claude invocation, issue tracking, and metrics collection.
 
 ## Why We Build This
 
@@ -52,7 +52,7 @@ Generated code conforms to project PRDs and architecture. Commits reference the 
 
 ### Developer Experience
 
-Consuming projects integrate the orchestrator by creating a Config struct and calling `New()`. The orchestrator handles git, containers, and issue tracking internally. Customization is available through prompt templates, seed files, and configuration fields. The developer's interaction surface is Mage targets, not orchestrator internals.
+Consuming projects integrate the orchestrator by creating a Config struct and calling `New()`. The orchestrator handles git and issue tracking internally. Customization is available through prompt templates, seed files, and configuration fields. The developer's interaction surface is Mage targets, not orchestrator internals.
 
 ## Implementation Phases
 
@@ -63,7 +63,6 @@ Table 2 Implementation Phases
 | 01.0 | Core orchestrator | Config, Orchestrator struct, logging, flag parsing |
 | 01.1 | Cobbler workflows | Measure and stitch phases, prompt templates, Claude invocation |
 | 02.0 | Generation lifecycle | Start, run, resume, stop, reset, list, switch |
-| 02.1 | Container execution | Podman/Docker detection, image building, container-based Claude execution |
 | 03.0 | Metrics and tracking | Stats collection, invocation records, LOC snapshots, beads integration |
 
 ## Risks and Mitigations
@@ -74,7 +73,6 @@ Table 3 Risks and Mitigations
 |------|--------|------------|------------|
 | Claude produces invalid code that fails to compile | Stitch task fails, blocking generation progress | Medium | Recovery mechanism resets failed tasks to ready; next cycle retries |
 | Git merge conflicts between task branches | Task merge fails, requiring manual intervention | Low | Worktree isolation limits conflict surface; tasks are small and focused |
-| Container runtime unavailable on developer machine | Cannot run Claude in isolation | Low | Fallback to direct claude binary; --no-container flag |
 | Beads issue tracker corruption | Task state lost | Low | Beads syncs to JSONL on every write; git tracks all changes |
 
 ## What This Is NOT

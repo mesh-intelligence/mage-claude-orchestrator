@@ -98,7 +98,6 @@ requirements:
 
 non_goals:
   - This PRD does not define what happens inside measure or stitch cycles (see prd003)
-  - This PRD does not define container execution (see prd004)
   - This PRD does not define multi-generation concurrency (one generation at a time)
 
 acceptance_criteria:

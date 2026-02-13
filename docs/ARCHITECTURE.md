@@ -4,7 +4,7 @@
 
 Mage Claude Orchestrator is a Go library that automates AI-driven code generation through a two-phase loop: measure (propose tasks) and stitch (execute tasks in isolated worktrees). Consuming projects import the library, configure it with project-specific paths and templates, and expose its methods as Mage targets.
 
-The system operates as build tooling, not a standalone application. An `Orchestrator` struct holds a `Config` and provides methods that Mage calls as targets. These methods coordinate four subsystems: git branch management, Claude invocation (via container or direct binary), issue tracking (beads), and metrics collection.
+The system operates as build tooling, not a standalone application. An `Orchestrator` struct holds a `Config` and provides methods that Mage calls as targets. These methods coordinate four subsystems: git branch management, Claude invocation (direct binary), issue tracking (beads), and metrics collection.
 
 |  |
 |:--:|
@@ -23,7 +23,6 @@ package "orchestrator" {
   [Generator] <<lifecycle>>
   [Cobbler] <<measure + stitch>>
   [Commands] <<git, beads, go wrappers>>
-  [Docker] <<container runtime>>
   [Stats] <<metrics>>
 }
 
@@ -32,7 +31,6 @@ package "External Tools" {
   [Claude Code]
   [Beads (bd)]
   [Go Toolchain]
-  [Podman / Docker]
 }
 
 [Magefile] --> [Orchestrator]
@@ -41,13 +39,10 @@ package "External Tools" {
 [Orchestrator] --> [Stats]
 [Generator] --> [Commands]
 [Cobbler] --> [Commands]
-[Cobbler] --> [Docker]
+[Cobbler] --> [Claude Code]
 [Commands] --> [Git]
 [Commands] --> [Beads (bd)]
 [Commands] --> [Go Toolchain]
-[Docker] --> [Podman / Docker]
-[Docker] --> [Claude Code]
-[Cobbler] ..> [Claude Code] : direct fallback
 
 @enduml
 ```
@@ -106,12 +101,8 @@ Table 1 Config Fields
 | BeadsDir | string | ".beads/" | Beads database directory |
 | CobblerDir | string | ".cobbler/" | Scratch directory |
 | MagefilesDir | string | "magefiles" | Directory skipped when deleting Go files |
-| ContainerImage | string | | Docker/Podman image name |
-| ContainerTag | string | "latest" | Image tag |
-| DockerfileDir | string | "magefiles" | Directory containing Dockerfile.claude |
 | SecretsDir | string | ".secrets" | Directory for token files |
 | DefaultTokenFile | string | "claude.json" | Credential filename |
-| ContainerCredDst | string | "/home/crumbs/.claude/.credentials.json" | Container credential path |
 | SpecGlobs | map[string]string | | Glob patterns for word-count stats |
 | SeedFiles | map[string]string | | Template files seeded during reset |
 | MeasurePrompt | string | (embedded) | Custom measure prompt template |
@@ -152,7 +143,6 @@ Table 3 CobblerConfig Fields
 | UserPrompt | string | "" | Additional context for Claude |
 | GenerationBranch | string | "" | Explicit branch to work on |
 | TokenFile | string | Config.DefaultTokenFile | Credential file in .secrets/ |
-| NoContainer | bool | false | Skip container, use local claude |
 
 ### Prompt Templates
 
@@ -195,8 +185,6 @@ Table 5 InvocationRecord Fields
 
 **Commands (commands.go)**: Wrapper functions for external tools. Over 50 functions wrapping git, beads (bd), and Go CLI commands. Centralizes binary names as constants and provides structured access to command output.
 
-**Docker (docker.go)**: Container runtime detection (podman, then docker), image building, and container-based Claude execution. Mounts the workspace and credentials into the container. Falls back to direct binary when no runtime is available.
-
 **Flags (flags.go)**: Mage flag interception. Captures flags from os.Args before Mage processes them, enabling per-target flag parsing. Provides InitFlags(), ParseTargetFlags(), and TargetArgs().
 
 **Stats (stats.go)**: Collects Go LOC counts (production and test) and documentation word counts. Uses the configured GoSourceDirs and SpecGlobs. Output is used for invocation records and the `mage stats` target.
@@ -213,7 +201,7 @@ Table 5 InvocationRecord Fields
 
 **Decision 3: Two-phase cobbler loop.** We separate task proposal (measure) from task execution (stitch). This allows measure to see the full project state before proposing work, and stitch to execute tasks independently. Alternative: a single-phase approach where Claude both proposes and executes loses the ability to review proposed tasks before execution.
 
-**Decision 4: Container-first Claude execution.** We prefer running Claude in a container (podman, then docker) for isolation, falling back to direct binary when no container runtime is available. The --no-container flag overrides this behavior. Alternative: always using the direct binary loses container isolation benefits.
+**Decision 4: Direct Claude execution.** We run Claude as a local binary via the `claude` CLI. The orchestrator passes a prompt on stdin and captures stdout for token parsing. This keeps the dependency footprint minimal and avoids container runtime requirements. Alternative: container-based execution adds isolation but increases setup complexity and is not needed for local development workflows.
 
 **Decision 5: Beads for issue tracking.** We use the beads git-backed issue tracker because it stores issues as JSONL files tracked by git. This means task state travels with the generation branch and is recoverable from any commit. Alternative: external issue trackers (GitHub Issues, Jira) require network access and do not travel with the branch.
 
@@ -232,7 +220,6 @@ Table 6 Technology Choices
 | Version control | git (worktrees, tags, branches) | Isolation, lifecycle tracking, merge |
 | Issue tracking | Beads (bd CLI) | Git-backed task management via JSONL |
 | AI execution | Claude Code (CLI) | Code generation and task execution |
-| Container runtime | Podman / Docker | Isolated Claude execution |
 | Prompt templating | Go text/template | Parameterized prompts |
 | Dependencies | Standard library only | No external Go dependencies |
 
@@ -248,7 +235,6 @@ mage-claude-orchestrator/
   stitch.go           # Stitch phase: worktree, Claude, merge
   generator.go        # Generation lifecycle: start/run/resume/stop/reset
   commands.go         # Git, beads, Go command wrappers
-  docker.go           # Container runtime detection and execution
   beads.go            # Beads initialization and reset
   stats.go            # LOC and documentation metrics
   go.mod              # Module definition (no external deps)
@@ -261,7 +247,7 @@ All code lives in a single `orchestrator` package. Consuming projects import it 
 
 ## Implementation Status
 
-The orchestrator is implemented and in active use by the Crumbs project. All components described in this architecture are functional: generation lifecycle, measure and stitch workflows, container execution with fallback, metrics collection, and recovery from interrupted runs.
+The orchestrator is implemented and in active use by the Crumbs project. All components described in this architecture are functional: generation lifecycle, measure and stitch workflows, metrics collection, and recovery from interrupted runs.
 
 ## Related Documents
 
@@ -274,7 +260,6 @@ Table 7 Related Documents
 | prd001-orchestrator-core | Config, Orchestrator struct, flag parsing, initialization |
 | prd002-generation-lifecycle | Generation start, run, resume, stop, reset, list, switch |
 | prd003-cobbler-workflows | Measure and stitch phases, prompt templates, task execution |
-| prd004-container-execution | Container runtime detection, image building, Claude in containers |
 | prd005-metrics-collection | Stats, invocation records, LOC snapshots |
 | engineering/eng01-generation-workflow | Generation conventions and task branch naming |
 | engineering/eng02-prompt-templates | Prompt template conventions and customization |

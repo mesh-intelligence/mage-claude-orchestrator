@@ -35,7 +35,7 @@ test_cases:
   - name: GeneratorRun executes specified cycles
     description: After generator:start, run with --cycles 1 to execute one measure+stitch cycle
     inputs:
-      command: mage generator:run --cycles 1 --no-container --max-issues 1
+      command: mage generator:run --cycles 1 --max-issues 1
     expected:
       exit_code: 0
       stdout_contains: "complete, ran 1 cycle(s)"

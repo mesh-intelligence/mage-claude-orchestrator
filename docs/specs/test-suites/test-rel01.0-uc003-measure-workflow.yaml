@@ -9,12 +9,12 @@ tags:
 preconditions:
   - Clean git repository on a generation branch
   - Beads initialized with no existing issues
-  - Claude binary or container runtime available
+  - Claude binary available
 
 test_cases:
   - name: Measure queries existing issues
     inputs:
-      command: mage cobbler:measure --max-issues 3 --no-container
+      command: mage cobbler:measure --max-issues 3
     expected:
       exit_code: 0
       state:
@@ -24,7 +24,7 @@ test_cases:
     inputs:
       command: |
         rm -rf .beads
-        mage cobbler:measure --no-container
+        mage cobbler:measure
     expected:
       exit_code: 1
       stderr_contains: "beads not initialized"
@@ -33,7 +33,7 @@ test_cases:
     description: After a successful measure, beads should contain the proposed issues
     inputs:
       command: |
-        mage cobbler:measure --max-issues 3 --no-container
+        mage cobbler:measure --max-issues 3
         bd list --json
     expected:
       exit_code: 0
@@ -42,7 +42,7 @@ test_cases:
 
   - name: Measure respects --max-issues limit
     inputs:
-      command: mage cobbler:measure --max-issues 2 --no-container
+      command: mage cobbler:measure --max-issues 2
     expected:
       exit_code: 0
       state:
@@ -51,7 +51,7 @@ test_cases:
   - name: Measure records InvocationRecord on created issues
     inputs:
       command: |
-        mage cobbler:measure --max-issues 1 --no-container
+        mage cobbler:measure --max-issues 1
         bd list --json
     expected:
       exit_code: 0

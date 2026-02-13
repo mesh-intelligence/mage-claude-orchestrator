@@ -24,8 +24,6 @@ test_cases:
         beads_dir: ".beads/"
         cobbler_dir: ".cobbler/"
         magefiles_dir: "magefiles"
-        container_tag: "latest"
-        dockerfile_dir: "magefiles"
         secrets_dir: ".secrets"
         default_token_file: "claude.json"
 

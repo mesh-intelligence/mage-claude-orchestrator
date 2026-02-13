@@ -29,16 +29,12 @@ requirements:
       - R1.8: Config must include BeadsDir (string, default ".beads/") for the issue tracker directory
       - R1.9: Config must include CobblerDir (string, default ".cobbler/") for the scratch directory
       - R1.10: Config must include MagefilesDir (string, default "magefiles") for the directory skipped during Go file deletion
-      - R1.11: Config must include ContainerImage (string) for the container image name
-      - R1.12: Config must include ContainerTag (string, default "latest") for the image tag
-      - R1.13: Config must include DockerfileDir (string, default "magefiles") for the Dockerfile location
-      - R1.14: Config must include SecretsDir (string, default ".secrets") for token files
-      - R1.15: Config must include DefaultTokenFile (string, default "claude.json") for the credential filename
-      - R1.16: Config must include ContainerCredDst (string) for the container credential path
-      - R1.17: Config must include SpecGlobs (map[string]string) for documentation word-count globs
-      - R1.18: Config must include SeedFiles (map[string]string) mapping file paths to Go template strings
-      - R1.19: Config must include MeasurePrompt (string) for custom measure prompt override
-      - R1.20: Config must include StitchPrompt (string) for custom stitch prompt override
+      - R1.11: Config must include SecretsDir (string, default ".secrets") for token files
+      - R1.12: Config must include DefaultTokenFile (string, default "claude.json") for the credential filename
+      - R1.13: Config must include SpecGlobs (map[string]string) for documentation word-count globs
+      - R1.14: Config must include SeedFiles (map[string]string) mapping file paths to Go template strings
+      - R1.15: Config must include MeasurePrompt (string) for custom measure prompt override
+      - R1.16: Config must include StitchPrompt (string) for custom stitch prompt override
 
   R2:
     title: Constructor and Defaults
@@ -49,10 +45,8 @@ requirements:
       - R2.4: applyDefaults must set BeadsDir to ".beads/" when empty
       - R2.5: applyDefaults must set CobblerDir to ".cobbler/" when empty
       - R2.6: applyDefaults must set MagefilesDir to "magefiles" when empty
-      - R2.7: applyDefaults must set ContainerTag to "latest" when empty
-      - R2.8: applyDefaults must set DockerfileDir to "magefiles" when empty
-      - R2.9: applyDefaults must set SecretsDir to ".secrets" when empty
-      - R2.10: applyDefaults must set DefaultTokenFile to "claude.json" when empty
+      - R2.7: applyDefaults must set SecretsDir to ".secrets" when empty
+      - R2.8: applyDefaults must set DefaultTokenFile to "claude.json" when empty
 
   R3:
     title: Logging
@@ -87,7 +81,6 @@ requirements:
 non_goals:
   - This PRD does not define the generation lifecycle (see prd002)
   - This PRD does not define measure or stitch workflows (see prd003)
-  - This PRD does not define container execution (see prd004)
   - This PRD does not define metrics collection (see prd005)
 
 acceptance_criteria:

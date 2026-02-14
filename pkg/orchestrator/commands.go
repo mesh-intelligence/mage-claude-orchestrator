@@ -13,13 +13,14 @@ import (
 
 // Binary names.
 const (
-	binGit    = "git"
-	binBd     = "bd"
-	binClaude = "claude"
-	binGo     = "go"
-	binLint   = "golangci-lint"
-	binMage   = "mage"
-	binPodman = "podman"
+	binGit      = "git"
+	binBd       = "bd"
+	binClaude   = "claude"
+	binGo       = "go"
+	binLint     = "golangci-lint"
+	binMage     = "mage"
+	binPodman   = "podman"
+	binSecurity = "security"
 )
 
 // defaultClaudeArgs are the CLI arguments for automated Claude execution.

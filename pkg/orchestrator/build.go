@@ -111,3 +111,23 @@ func (o *Orchestrator) Clean() error {
 	logf("clean: done")
 	return nil
 }
+
+// ExtractCredentials reads Claude credentials from the macOS Keychain
+// and writes them to SecretsDir/TokenFile.
+func (o *Orchestrator) ExtractCredentials() error {
+	outPath := filepath.Join(o.cfg.SecretsDir, o.cfg.EffectiveTokenFile())
+	logf("credentials: extracting to %s", outPath)
+	if err := os.MkdirAll(o.cfg.SecretsDir, 0o700); err != nil {
+		return fmt.Errorf("creating secrets directory: %w", err)
+	}
+	out, err := exec.Command(binSecurity, "find-generic-password",
+		"-s", "Claude Code-credentials", "-w").Output()
+	if err != nil {
+		return fmt.Errorf("extracting credentials from keychain: %w", err)
+	}
+	if err := os.WriteFile(outPath, out, 0o600); err != nil {
+		return fmt.Errorf("writing credentials: %w", err)
+	}
+	logf("credentials: written to %s", outPath)
+	return nil
+}

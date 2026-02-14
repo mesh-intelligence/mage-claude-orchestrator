@@ -72,6 +72,9 @@ func Install() error { return newOrch().Install() }
 // Clean removes build artifacts.
 func Clean() error { return newOrch().Clean() }
 
+// Credentials extracts Claude credentials from the macOS Keychain.
+func Credentials() error { return newOrch().ExtractCredentials() }
+
 // --- Test targets ---
 
 // Unit runs go test on all packages.

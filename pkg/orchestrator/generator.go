@@ -629,7 +629,7 @@ func (o *Orchestrator) GeneratorReset() error {
 
 	logf("generator:reset: committing clean state")
 	_ = gitStageAll()
-	_ = gitCommit("Generator reset: return to clean state")
+	_ = gitCommitAllowEmpty("Generator reset: return to clean state")
 
 	logf("generator:reset: done, only main branch remains")
 	return nil

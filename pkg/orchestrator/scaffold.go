@@ -56,12 +56,26 @@ func (o *Orchestrator) Scaffold(targetDir, orchestratorRoot string) error {
 	binName := detectBinaryName(modulePath)
 	logf("scaffold: detected binary_name=%s", binName)
 
-	// 3. Generate configuration.yaml in the target root.
+	// 3. Generate seed files and configuration.yaml in the target root.
 	cfg := DefaultConfig()
 	cfg.ModulePath = modulePath
 	cfg.BinaryName = binName
 	cfg.MainPackage = mainPkg
 	cfg.GoSourceDirs = srcDirs
+
+	// When a main package is detected, create a version.go seed template
+	// so that after generator:reset the project has a minimal compilable
+	// binary. The template is stored in magefiles/ and referenced by
+	// seed_files in configuration.yaml.
+	if mainPkg != "" {
+		seedPath, tmplPath, err := scaffoldSeedTemplate(targetDir, modulePath, mainPkg, mageDir)
+		if err != nil {
+			return fmt.Errorf("creating seed template: %w", err)
+		}
+		cfg.SeedFiles = map[string]string{seedPath: tmplPath}
+		cfg.VersionFile = seedPath
+		logf("scaffold: created seed template %s -> %s", seedPath, tmplPath)
+	}
 
 	cfgPath := filepath.Join(targetDir, DefaultConfigFile)
 	logf("scaffold: writing %s", cfgPath)
@@ -190,6 +204,43 @@ func detectBinaryName(modulePath string) string {
 		return "app"
 	}
 	return parts[len(parts)-1]
+}
+
+// scaffoldSeedTemplate creates a version.go.tmpl in mageDir and returns
+// the destination path (relative to repo root) and the template source
+// path (relative to repo root) for use in seed_files configuration.
+func scaffoldSeedTemplate(targetDir, modulePath, mainPkg, mageDir string) (destPath, tmplPath string, err error) {
+	// Derive the relative directory for the main package.
+	// e.g. modulePath="github.com/org/repo", mainPkg="github.com/org/repo/cmd/app"
+	// → relDir="cmd/app"
+	relDir := strings.TrimPrefix(mainPkg, modulePath+"/")
+	if relDir == mainPkg {
+		// mainPkg equals modulePath — main is at repo root.
+		relDir = "."
+	}
+
+	destPath = filepath.Join(relDir, "version.go")
+	tmplPath = filepath.Join("magefiles", "version.go.tmpl")
+
+	tmplContent := `package main
+
+import "fmt"
+
+// Version is set during the generation process.
+const Version = "{{.Version}}"
+
+func main() {
+	fmt.Printf("%s version %s\n", "` + detectBinaryName(modulePath) + `", Version)
+}
+`
+	absPath := filepath.Join(targetDir, tmplPath)
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+		return "", "", err
+	}
+	if err := os.WriteFile(absPath, []byte(tmplContent), 0o644); err != nil {
+		return "", "", err
+	}
+	return destPath, tmplPath, nil
 }
 
 // writeScaffoldConfig marshals cfg as YAML and writes it to path.
@@ -357,6 +408,17 @@ func (o *Orchestrator) PrepareTestRepo(module, version, orchestratorRoot string)
 	if err := copyDir(cacheDir, repoDir); err != nil {
 		os.RemoveAll(workDir)
 		return "", fmt.Errorf("copying module source: %w", err)
+	}
+
+	// Remove development artifacts from the copied source. Module
+	// sources may include .beads/, .cobbler/, or other local state
+	// directories that interfere with a clean test environment.
+	for _, artifact := range []string{".beads", ".cobbler"} {
+		p := filepath.Join(repoDir, artifact)
+		if _, err := os.Stat(p); err == nil {
+			logf("prepareTestRepo: removing artifact %s", artifact)
+			os.RemoveAll(p)
+		}
 	}
 
 	// Initialize a fresh git repository.

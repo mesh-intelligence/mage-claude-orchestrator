@@ -32,6 +32,22 @@ var defaultClaudeArgs = []string{
 	"--output-format", "stream-json",
 }
 
+func init() {
+	// Ensure GOBIN (or GOPATH/bin) is in PATH so exec.LookPath finds
+	// Go-installed binaries like mage and golangci-lint.
+	if gobin, err := exec.Command(binGo, "env", "GOBIN").Output(); err == nil {
+		if dir := strings.TrimSpace(string(gobin)); dir != "" {
+			os.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+			return
+		}
+	}
+	if gopath, err := exec.Command(binGo, "env", "GOPATH").Output(); err == nil {
+		if dir := strings.TrimSpace(string(gopath)); dir != "" {
+			os.Setenv("PATH", dir+"/bin:"+os.Getenv("PATH"))
+		}
+	}
+}
+
 // Git helpers.
 
 func gitCheckout(branch string) error {
@@ -200,7 +216,13 @@ func (o *Orchestrator) bdAdminReset() error {
 	// Stop the daemon before destroying the database; otherwise the
 	// stale daemon blocks subsequent bd commands.
 	_ = exec.Command(binBd, "daemon", "stop", ".").Run()
-	return exec.Command(binBd, "admin", "reset", "--force").Run()
+	if err := exec.Command(binBd, "admin", "reset", "--force").Run(); err != nil {
+		// Fallback: remove the directory directly. This handles legacy
+		// databases or bd version mismatches where the CLI command fails.
+		logf("bdAdminReset: bd admin reset failed (%v), falling back to rm -rf %s", err, o.cfg.BeadsDir)
+		return os.RemoveAll(o.cfg.BeadsDir)
+	}
+	return nil
 }
 
 func bdInit(prefix string) error {

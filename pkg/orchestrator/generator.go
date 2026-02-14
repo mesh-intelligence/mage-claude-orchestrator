@@ -293,6 +293,17 @@ func (o *Orchestrator) mergeGenerationIntoMain(branch string) error {
 			logf("generator:stop: code tag warning: %v", err)
 		}
 
+		// Update the version constant in the consuming project's version file.
+		if o.cfg.VersionFile != "" {
+			logf("generator:stop: writing version %s to %s", codeTag, o.cfg.VersionFile)
+			if err := writeVersionConst(o.cfg.VersionFile, codeTag); err != nil {
+				logf("generator:stop: version file warning: %v", err)
+			} else {
+				_ = gitStageAll()
+				_ = gitCommit(fmt.Sprintf("Set version to %s", codeTag))
+			}
+		}
+
 		startTag := branch + "-start"
 		logf("generator:stop: tagging requirements as %s (at %s)", reqTag, startTag)
 		if err := gitTagAt(reqTag, startTag); err != nil {

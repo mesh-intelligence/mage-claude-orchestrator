@@ -15,9 +15,11 @@ import (
 var embeddedDockerfile string
 
 // BuildImage builds the container image using podman from the embedded
-// Dockerfile. It derives the version tag from the latest v* git tag and
-// applies both the versioned tag and "latest" to the built image. The
-// image name is taken from PodmanImage (stripped of any existing tag).
+// Dockerfile. It reads the version from the consuming project's version
+// file (VersionFile in Config). If no version file is configured or it
+// has no Version constant, it falls back to the latest v* git tag.
+// Both a versioned tag and "latest" are applied to the built image.
+// The image name is taken from PodmanImage (stripped of any existing tag).
 //
 // Exposed as a mage target (e.g., mage buildImage).
 func (o *Orchestrator) BuildImage() error {
@@ -26,9 +28,13 @@ func (o *Orchestrator) BuildImage() error {
 		return fmt.Errorf("podman_image not set in configuration; cannot determine image name")
 	}
 
-	tag := latestVersionTag()
+	// Prefer version from the project's version file; fall back to git tags.
+	tag := readVersionConst(o.cfg.VersionFile)
 	if tag == "" {
-		return fmt.Errorf("no v* git tag found; tag the repository first (e.g., v0.YYYYMMDD.N)")
+		tag = latestVersionTag()
+	}
+	if tag == "" {
+		return fmt.Errorf("no version found; set version_file in configuration.yaml or tag the repository (e.g., v0.YYYYMMDD.N)")
 	}
 
 	versionedImage := imageName + ":" + tag

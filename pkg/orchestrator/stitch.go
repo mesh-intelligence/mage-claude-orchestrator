@@ -74,8 +74,8 @@ func (o *Orchestrator) RunStitch() error {
 
 	totalTasks := 0
 	for {
-		if o.cfg.MaxIssues > 0 && totalTasks >= o.cfg.MaxIssues {
-			logf("stitch: reached max-issues limit (%d), stopping", o.cfg.MaxIssues)
+		if o.cfg.MaxStitchIssues > 0 && totalTasks >= o.cfg.MaxStitchIssues {
+			logf("stitch: reached max-stitch-issues limit (%d), stopping", o.cfg.MaxStitchIssues)
 			break
 		}
 

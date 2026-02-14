@@ -72,8 +72,13 @@ type CobblerConfig struct {
 	// BeadsDir is the beads database directory (default ".beads/").
 	BeadsDir string `yaml:"beads_dir"`
 
-	// MaxIssues is the maximum number of tasks per measure or stitch phase (default 10).
-	MaxIssues int `yaml:"max_issues"`
+	// MaxStitchIssues is the maximum number of tasks to process per stitch
+	// pass (default 10).
+	MaxStitchIssues int `yaml:"max_stitch_issues"`
+
+	// MaxMeasureIssues is the maximum number of new issues to create per
+	// measure pass (default 1).
+	MaxMeasureIssues int `yaml:"max_measure_issues"`
 
 	// UserPrompt provides additional context for the measure prompt.
 	UserPrompt string `yaml:"user_prompt"`
@@ -229,8 +234,11 @@ func (c *Config) applyDefaults() {
 	if len(c.ClaudeArgs) == 0 {
 		c.ClaudeArgs = defaultClaudeArgs
 	}
-	if c.MaxIssues == 0 {
-		c.MaxIssues = 10
+	if c.MaxStitchIssues == 0 {
+		c.MaxStitchIssues = 10
+	}
+	if c.MaxMeasureIssues == 0 {
+		c.MaxMeasureIssues = 1
 	}
 	if c.EstimatedLinesMin == 0 {
 		c.EstimatedLinesMin = 250

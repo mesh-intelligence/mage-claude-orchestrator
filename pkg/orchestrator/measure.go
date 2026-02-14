@@ -69,7 +69,7 @@ func (o *Orchestrator) RunMeasure() error {
 	existingIssues := getExistingIssues()
 
 	issueCount := countJSONArray(existingIssues)
-	logf("measure: found %d existing issue(s), maxIssues=%d", issueCount, o.cfg.MaxIssues)
+	logf("measure: found %d existing issue(s), maxMeasureIssues=%d", issueCount, o.cfg.MaxMeasureIssues)
 	logf("measure: outputFile=%s", outputFile)
 
 	// Snapshot LOC before Claude.
@@ -77,7 +77,7 @@ func (o *Orchestrator) RunMeasure() error {
 	logf("measure: locBefore prod=%d test=%d", locBefore.Production, locBefore.Test)
 
 	// Build and run prompt.
-	prompt := o.buildMeasurePrompt(o.cfg.UserPrompt, existingIssues, o.cfg.MaxIssues, outputFile)
+	prompt := o.buildMeasurePrompt(o.cfg.UserPrompt, existingIssues, o.cfg.MaxMeasureIssues, outputFile)
 	logf("measure: prompt built, length=%d bytes", len(prompt))
 
 	logf("measure: invoking Claude")

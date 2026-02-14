@@ -96,12 +96,14 @@ func (o *Orchestrator) GeneratorResume() error {
 	return o.RunCycles("resume")
 }
 
-// RunCycles runs measure+stitch cycles until no open issues remain.
+// RunCycles runs stitch→measure cycles until no open issues remain.
+// Each cycle stitches up to MaxStitchIssues tasks, then measures up to
+// MaxMeasureIssues new issues. The loop continues while open issues exist.
 // If Config.Cycles > 0, it acts as a safety limit (max cycles before forced stop).
 // If Config.Cycles == 0, cycles run until all issues are closed.
 func (o *Orchestrator) RunCycles(label string) error {
-	logf("generator %s: starting (max issues per stitch=%d, safety limit=%d cycles)",
-		label, o.cfg.MaxIssues, o.cfg.Cycles)
+	logf("generator %s: starting (stitch=%d measure=%d safety=%d cycles)",
+		label, o.cfg.MaxStitchIssues, o.cfg.MaxMeasureIssues, o.cfg.Cycles)
 
 	for cycle := 1; ; cycle++ {
 		if o.cfg.Cycles > 0 && cycle > o.cfg.Cycles {
@@ -109,14 +111,14 @@ func (o *Orchestrator) RunCycles(label string) error {
 			break
 		}
 
-		logf("generator %s: cycle %d — measure", label, cycle)
-		if err := o.RunMeasure(); err != nil {
-			return fmt.Errorf("cycle %d measure: %w", cycle, err)
-		}
-
 		logf("generator %s: cycle %d — stitch", label, cycle)
 		if err := o.RunStitch(); err != nil {
 			return fmt.Errorf("cycle %d stitch: %w", cycle, err)
+		}
+
+		logf("generator %s: cycle %d — measure", label, cycle)
+		if err := o.RunMeasure(); err != nil {
+			return fmt.Errorf("cycle %d measure: %w", cycle, err)
 		}
 
 		if !o.hasOpenIssues() {

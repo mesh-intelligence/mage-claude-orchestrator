@@ -11,7 +11,7 @@ import (
 
 // versionConstRe matches a Go const declaration like:
 //
-//	const Version = "v0.20260212.0"
+//	const Version = "v1.20260212.0"
 //
 // It captures the quoted value.
 var versionConstRe = regexp.MustCompile(`(?m)^const\s+Version\s*=\s*"([^"]*)"`)

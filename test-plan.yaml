@@ -336,8 +336,8 @@ test_cases:
     expected:
       exit_code: 0
       state:
-        version_file_contains: "v0."
-        git_log_contains: "Set version to v0."
+        version_file_contains: "v1."
+        git_log_contains: "Set version to v1."
 
   # ── 7. Generator run (requires Claude) ──
 

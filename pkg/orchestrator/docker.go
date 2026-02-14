@@ -34,7 +34,7 @@ func (o *Orchestrator) BuildImage() error {
 		tag = latestVersionTag()
 	}
 	if tag == "" {
-		return fmt.Errorf("no version found; set version_file in configuration.yaml or tag the repository (e.g., v0.YYYYMMDD.N)")
+		return fmt.Errorf("no version found; set version_file in configuration.yaml or tag the repository (e.g., v[REL].YYYYMMDD.N)")
 	}
 
 	versionedImage := imageName + ":" + tag

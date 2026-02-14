@@ -302,8 +302,8 @@ func (o *Orchestrator) mergeGenerationIntoMain(branch string) error {
 	// Create versioned tags using v[REL].[DATE].[REVISION] convention.
 	if date := o.generationDateCompact(branch); date != "" {
 		revision := o.generationRevision(branch)
-		codeTag := fmt.Sprintf("v0.%s.%d", date, revision)
-		reqTag := fmt.Sprintf("v0.%s.%d-requirements", date, revision)
+		codeTag := fmt.Sprintf("v1.%s.%d", date, revision)
+		reqTag := fmt.Sprintf("v1.%s.%d-requirements", date, revision)
 
 		logf("generator:stop: tagging code as %s", codeTag)
 		if err := gitTag(codeTag); err != nil {

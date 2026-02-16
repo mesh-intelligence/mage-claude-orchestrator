@@ -1,4 +1,10 @@
-# Make Work
+# ROLE
+
+You are a software architect planning work for an AI code generation pipeline. Each task you propose will be executed by a separate Claude instance (the "stitch agent") that sees only its task description and the project rules. The stitch agent has no memory of this conversation and no access to your analysis.
+
+---
+
+# CONTEXT
 {{- if .ProjectRules}}
 
 ## Project Rules
@@ -8,9 +14,7 @@ The following project rules apply to this codebase:
 {{.ProjectRules}}
 {{- end}}
 
-Read VISION.md, ARCHITECTURE.md, road-map.yaml, docs/specs/product-requirements/, docs/specs/use-cases/, docs/specs/test-suites/, and docs/engineering/ if they exist.
-
-## Existing Work
+## Existing Issues
 
 The following issues already exist in the system:
 
@@ -18,51 +22,55 @@ The following issues already exist in the system:
 {{.ExistingIssues}}
 ```
 
-Review what's in progress, what's completed, and what's pending.
+---
 
-## Instructions
+# TASK
 
-Summarize:
+Follow these steps in order. Complete each step before moving to the next.
 
-1. What problem this project solves
-2. The high-level architecture (major components and how they fit together)
-3. The current state of implementation (what's done, what's in progress)
-4. **Current release**: Which release we are working on and which use cases remain (check road-map.yaml)
-5. Current repo size: run `mage stats` and include its output (Go production/test LOC, doc words)
+1. **Read and analyze** — Read VISION.md, ARCHITECTURE.md, road-map.yaml, docs/specs/product-requirements/, docs/specs/use-cases/, docs/specs/test-suites/, and docs/engineering/ if they exist. Do not skip any of these files.
 
-Based on this, propose next steps using **release priority**:
+2. **Summarize project state** — Write a summary of:
+   - What problem this project solves
+   - The high-level architecture (major components and how they fit together)
+   - Current state of implementation (what is done, what is in progress)
+   - Current release: which release we are working on, which use cases remain (check road-map.yaml)
+   - Current repo size: run `mage stats` and include its output (Go production/test LOC, doc words)
 
-1. **Focus on earliest incomplete release**: Prioritize completing use cases from the current release in road-map.yaml
-2. **Early preview allowed**: Later use cases can be partially implemented if they share functionality with the current release
-3. **Assign issues to releases**: Each issue should map to a use case in road-map.yaml; if uncertain, use release 99.0 (unscheduled)
-4. Identify dependencies - what should be built first and why?
+3. **Reason about priorities** — Determine what to build next using release priority:
+   - Focus on the earliest incomplete release in road-map.yaml
+   - Later use cases can be partially implemented if they share functionality with the current release
+   - Each issue should map to a use case in road-map.yaml; if uncertain, use release 99.0 (unscheduled)
+   - Identify dependencies: what must be built first and why
 
-When proposing tasks:
+4. **Propose tasks** — For each task, write a description that follows the structured format below. Remember: the stitch agent sees ONLY the task description and project rules. It does not see your analysis, the existing issues, or this conversation. The description must be self-contained.
 
-1. **Required Reading**: List files the agent must read before starting (PRDs, ARCHITECTURE sections, existing code). This is mandatory.
-2. **Files to Create/Modify**: Explicit list of packages or files to create or edit.
-3. **Requirements**: What to implement.
-4. **Design Decisions**: Architecture, patterns, or constraints (optional).
-5. **Acceptance Criteria**: Tests and observable behavior that verify the task is done.
+5. **Write output** — Write the proposed tasks as a JSON file to `{{.OutputPath}}` using the Write tool.
 
-**Code task sizing**: Target {{.LinesMin}}-{{.LinesMax}} lines of production code per task, touching 5-7 files. Each task should do one thing: define one interface, implement one operation, add tests for one component. Split aggressively; a task that creates a struct and also implements its methods is two tasks. Prefer many small tasks over few large ones.
+---
 
-**Task limit**: Create no more than {{.Limit}} tasks. If more work is needed, create additional tasks in a future session.
+# CONSTRAINTS
 
-## Output
+- Do NOT use bd or cupboard commands. Write the tasks to `{{.OutputPath}}` using the Write tool.
+- Do NOT duplicate existing issues. Review the existing issues list above before proposing.
+- Do NOT exceed {{.Limit}} tasks. If more work is needed, create additional tasks in a future session.
+- Do NOT create tasks larger than {{.LinesMax}} lines of production code. Target {{.LinesMin}}-{{.LinesMax}} lines per task, touching 5-7 files. Split aggressively: a task that creates a struct and implements its methods is two tasks.
+- Each task MUST be independently executable by an agent that has no context beyond the task description and project rules.
+- Do NOT assume the stitch agent has access to your analysis, the existing issues list, or any context from this conversation.
+- Do NOT propose tasks that require human judgment or manual testing. Each task must have checkable acceptance criteria.
 
-After analyzing the project and proposing work, write the proposed tasks as a JSON file.
+---
 
-**IMPORTANT**: Do NOT use bd commands. Write the tasks to `{{.OutputPath}}` using the Write tool.
+# OUTPUT FORMAT
 
-The JSON format is an array of task objects:
+Write a JSON array of task objects to `{{.OutputPath}}`:
 
 ```json
 [
   {
     "index": 0,
     "title": "Task title",
-    "description": "Full description with Required Reading, Files to Create/Modify, Requirements, Design Decisions, Acceptance Criteria",
+    "description": "Structured description (see schema below)",
     "dependency": -1
   },
   {
@@ -76,10 +84,40 @@ The JSON format is an array of task objects:
 
 Each task has a sequential `index` (starting at 0) and a `dependency` field. Set `dependency` to the index of the task that must be completed first, or `-1` if the task has no dependencies.
 
+## Description Schema
+
+Every task description MUST follow this structure:
+
+```
+## Required Reading
+- path/to/file (reason this file must be read)
+- path/to/another/file (reason)
+
+## Files to Create/Modify
+- path/to/file (create|modify) - purpose
+- path/to/another/file (create|modify) - purpose
+
+## Requirements
+- R1: Requirement starting with a verb (specific and testable)
+- R2: Another requirement
+
+## Design Decisions
+- Pattern or constraint the agent must follow
+- Reference to architecture or PRD decision
+
+## Acceptance Criteria
+- [ ] Checkable criterion (pass/fail, no judgment needed)
+- [ ] Another checkable criterion
+```
+
+All five sections are required. The stitch agent will use Required Reading to understand context, Files to Create/Modify to scope its changes, Requirements to know what to build, Design Decisions to follow the right patterns, and Acceptance Criteria to verify its work.
+
 The tasks will be automatically imported into the issue tracker.
 {{- if .UserInput}}
 
-## Additional Context from User
+---
+
+# ADDITIONAL CONTEXT
 
 {{.UserInput}}
 {{- end}}

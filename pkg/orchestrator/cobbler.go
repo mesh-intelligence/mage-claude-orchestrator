@@ -271,7 +271,7 @@ func worktreeBasePath() string {
 	return filepath.Join(os.TempDir(), filepath.Base(repoRoot)+"-worktrees")
 }
 
-// hasOpenIssues returns true if there are ready tasks in beads.
+// hasOpenIssues returns true if there are tasks available for work in beads.
 func (o *Orchestrator) hasOpenIssues() bool {
 	out, err := bdListReadyTasks()
 	if err != nil {

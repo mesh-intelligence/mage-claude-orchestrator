@@ -273,7 +273,7 @@ func bdListClosedTasks() ([]byte, error) {
 }
 
 func bdListReadyTasks() ([]byte, error) {
-	return exec.Command(binBd, "list", "--json", "--status", "ready", "--type", "task").Output()
+	return exec.Command(binBd, "ready", "--json", "--type", "task").Output()
 }
 
 func bdCommentAdd(id, comment string) error {

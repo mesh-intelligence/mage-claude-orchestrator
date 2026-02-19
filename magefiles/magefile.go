@@ -81,6 +81,9 @@ func Credentials() error { return newOrch().ExtractCredentials() }
 // Analyze performs cross-artifact consistency checks (PRDs, use cases, test suites, roadmap).
 func Analyze() error { return newOrch().Analyze() }
 
+// Tag creates a documentation release tag (v0.YYYYMMDD.N) and builds the container image.
+func Tag() error { return newOrch().Tag() }
+
 // --- Test targets (standard) ---
 
 // Unit runs go test on all packages.

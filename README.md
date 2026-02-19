@@ -220,6 +220,7 @@ If a run is interrupted, `mage generator:resume` recovers state and continues. T
 | clean | Remove build artifacts |
 | credentials | Extract Claude credentials from macOS Keychain |
 | analyze | Check cross-artifact consistency (orphaned PRDs, missing test suites, broken references) |
+| tag | Create documentation release tag (v0.YYYYMMDD.N) and build container image |
 | test:unit | Run go test on all packages |
 | test:integration | Run go test in tests/ directory |
 | test:all | Run unit and integration tests |

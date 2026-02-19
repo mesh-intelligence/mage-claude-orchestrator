@@ -12,7 +12,7 @@
 *.test
 
 # Built binary (mage build output)
-orchestrator
+/orchestrator
 
 # Code coverage profiles and other test artifacts
 *.out

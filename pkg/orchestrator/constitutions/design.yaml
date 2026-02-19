@@ -70,22 +70,15 @@ documentation_standards:
       Explain abbreviations at least once per document section. Define
       domain-specific abbreviations on first use.
 
-    ai_terminology: |
-      Use "Generative AI" (not "GenAI"). Use "narrow-AI" (hyphenated) for
-      traditional ML. Use "general-AI" (hyphenated) for advanced AI systems.
-
   figures_and_diagrams: |
     All diagrams MUST be written in PlantUML and defined inline in markdown
     using fenced code blocks. Do not create separate .puml files or PNG images.
     Use centered table format for captioning:
-    |  |
-    |:--:|
-    | ```plantuml
-    | @startuml
-    | ... diagram source ...
-    | @enduml
-    | ```
-    |Figure N Title of the Figure |
+    ```plantuml
+    @startuml
+    ... diagram source ...
+    @enduml
+    ```
 
 document_types:
   vision:
@@ -185,29 +178,36 @@ document_types:
       (exit_code, stdout_contains, state, files).
 
   engineering_guideline:
-    location: "docs/engineering/eng[NN]-[short-name].md"
+    location: "docs/engineering/eng[NN]-[short-name].yaml"
     format_rule: engineering-guideline-format
-    required_sections:
-      - Title (H1)
-      - Introduction (one or two paragraphs)
-      - Body (H2 sections, tables for structured info)
+    required_fields:
+      - id
+      - title
+      - introduction (multi-line text)
+      - sections (list with title and content)
+    optional_fields:
+      - references
     purpose: |
       Documents conventions, practices, and patterns above the code and
       architecture. Not PRDs (no numbered requirements). Not architecture (no
       component descriptions).
 
   specification:
-    location: docs/SPECIFICATIONS.md
+    location: docs/SPECIFICATIONS.yaml
     format_rule: specification-format
-    required_sections:
-      - Overview (one or two paragraphs, reference VISION and ARCHITECTURE)
-      - Roadmap Summary (table: release, name, use case counts, status)
-      - PRD Index (table: ID, title, summary, links)
-      - Use Case Index (table: ID, title, release, status, test suite)
-      - Test Suite Index (table: ID, title, traces, test case count)
-      - PRD-to-Use-Case Mapping (table: use case, PRD, why required, coverage)
-      - Traceability Diagram (PlantUML showing PRD→use case→test suite)
-      - Coverage Gaps (use cases without test suites, PRDs not referenced)
+    required_fields:
+      - id
+      - title
+      - overview (multi-line text)
+      - roadmap_summary (list: version, name, use_cases_done, use_cases_total, status)
+      - prd_index (list: id, title, summary, path)
+      - use_case_index (list: id, title, release, status, test_suite, path)
+      - test_suite_index (list: id, title, traces, test_case_count, path)
+      - prd_to_use_case_mapping (list: use_case, prd, why_required, coverage)
+      - coverage_gaps (list or multi-line text)
+    optional_fields:
+      - traceability_diagram (PlantUML as multi-line string)
+      - references
     purpose: |
       Human-readable summary tying together PRDs, use cases, test suites, and
       roadmap into one navigable page. Does not duplicate content; summarizes
@@ -224,10 +224,10 @@ naming_conventions:
   prd: "prd[NNN]-[feature-name].yaml (e.g., prd001-cupboard-core.yaml)"
   use_case: "rel[NN].[N]-uc[NNN]-[short-name].yaml (e.g., rel01.0-uc001-cupboard-lifecycle.yaml)"
   test_suite: "test-[use-case-id].yaml (e.g., test-rel01.0-uc001-cupboard-lifecycle.yaml)"
-  engineering_guideline: "eng[NN]-[short-name].md (e.g., eng01-git-integration.md)"
+  engineering_guideline: "eng[NN]-[short-name].yaml (e.g., eng01-git-integration.yaml)"
   architecture: "ARCHITECTURE.yaml"
   vision: "VISION.yaml"
-  specification: "SPECIFICATIONS.md"
+  specification: "SPECIFICATIONS.yaml"
 
 writing_guidelines:
   audience: Developers, agents, reviewers. Assume readers need to build or extend the system.

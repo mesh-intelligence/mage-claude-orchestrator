@@ -353,8 +353,8 @@ project_structure:
     role: Embedded prompt templates (measure.tmpl, stitch.tmpl)
   - path: pkg/orchestrator/constitutions/
     role: Embedded constitutions (design.yaml, planning.yaml, execution.yaml)
-  - path: cmd/orchestrator/
-    role: CLI binary for testing orchestrator functions without mage
+  - path: magefiles/
+    role: Mage targets exposing orchestrator methods
   - path: vscode-extension/
     role: VS Code status dashboard (TypeScript)
   - path: docs/

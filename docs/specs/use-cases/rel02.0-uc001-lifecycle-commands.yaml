@@ -1,0 +1,62 @@
+# Copyright (c) 2026 Petar Djukic. All rights reserved.
+# SPDX-License-Identifier: MIT
+
+id: rel02.0-uc001-lifecycle-commands
+title: VS Code Lifecycle Commands
+
+summary: |
+  A developer working in VS Code executes generation lifecycle commands
+  (start, run, resume, stop, reset, switch) from the Command Palette without
+  switching to the terminal. Each command runs the corresponding mage target
+  in an integrated terminal, shows confirmation dialogs for destructive actions,
+  and refreshes extension views after completion.
+
+actor: Developer using VS Code with the orchestrator extension installed
+
+trigger: Developer invokes a lifecycle command from VS Code Command Palette (Cmd+Shift+P)
+
+flow:
+  - F1: "Open Command Palette: developer presses Cmd+Shift+P and types 'Mage Orchestrator'"
+  - F2: "Select command: developer chooses one of the lifecycle commands (Start, Run, Resume, Stop, Reset, Switch)"
+  - F3: "Validate state: extension checks git state and disables invalid commands (e.g., Start is disabled when already on a generation branch)"
+  - F4: "Confirm if destructive: commands that alter state (Start, Stop, Reset) show a confirmation dialog before proceeding"
+  - F5: "Execute mage target: extension creates or reuses an integrated terminal and runs the corresponding mage command (e.g., 'mage generator:start')"
+  - F6: "Show output: terminal output appears in the integrated terminal panel"
+  - F7: "Refresh views: extension refreshes generation browser and issue tracker views after command completes"
+
+touchpoints:
+  - T1: "VS Code commands API: prd006-vscode-extension R1.1, R1.2"
+  - T2: "Integrated terminal API: prd006-vscode-extension R1.2"
+  - T3: "Quick pick for switch: prd006-vscode-extension R1.3"
+  - T4: "Confirmation dialogs: prd006-vscode-extension R1.4"
+  - T5: "View refresh: prd006-vscode-extension R1.5"
+  - T6: "Command enablement: prd006-vscode-extension R1.6"
+  - T7: "Generation lifecycle: prd002-generation-lifecycle (all operations)"
+
+success_criteria:
+  - S1: All six lifecycle commands appear in Command Palette when configuration.yaml exists in workspace
+  - S2: Each command executes the correct mage target in an integrated terminal
+  - S3: Start, Stop, and Reset commands show confirmation dialogs before executing
+  - S4: Switch command shows a quick-pick list of available generation branches
+  - S5: Invalid commands are disabled (e.g., Start disabled when on generation branch, Resume disabled when not on generation branch)
+  - S6: All extension views refresh automatically after a command completes
+  - S7: Terminal output is visible and can be interacted with (scroll, copy)
+
+out_of_scope:
+  - Real-time streaming of Claude agent output (see prd006 non-goals)
+  - Automated test execution from extension (see prd006 non-goals)
+  - Generation browser tree view implementation (see rel02.0-uc002)
+  - Issue tracker view implementation (see rel02.0-uc004)
+  - Metrics dashboard implementation (see rel02.0-uc005)
+
+test_suite: test-rel02.0-uc001-lifecycle-commands
+
+dependencies:
+  - D1: prd006-vscode-extension R1 (lifecycle commands requirements)
+  - D2: prd002-generation-lifecycle (defines the lifecycle operations that commands execute)
+  - D3: Extension infrastructure (prd006 R7) must be in place for commands to register
+
+risks:
+  - K1: "Terminal state detection is unreliable | Use git ref checks instead of terminal parsing"
+  - K2: "Command completion detection is async | Use FileSystemWatcher on .git/refs/ to trigger view refresh"
+  - K3: "User closes terminal mid-execution | Extension should handle terminal disposal gracefully and not block"

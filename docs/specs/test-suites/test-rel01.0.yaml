@@ -1,0 +1,396 @@
+# Copyright (c) 2026 Petar Djukic. All rights reserved.
+# SPDX-License-Identifier: MIT
+
+id: test-rel01.0
+title: Release 01.0 test suite
+release: rel01.0
+traces:
+  - rel01.0-uc001-orchestrator-initialization
+  - rel01.0-uc002-generation-lifecycle
+  - rel01.0-uc003-measure-workflow
+  - rel01.0-uc004-stitch-workflow
+  - rel01.0-uc005-resume-recovery
+
+tags:
+  - unit
+  - integration
+  - smoke
+
+preconditions:
+  - Clean git repository on main branch with no beads directory
+  - Go module initialized
+  - configuration.yaml present
+
+# ---- uc001: Orchestrator initialization and configuration ----
+
+test_cases:
+  - use_case: rel01.0-uc001-orchestrator-initialization
+    name: New applies defaults to zero-value Config
+    inputs:
+      command: |
+        cfg := orchestrator.Config{
+          Project: orchestrator.ProjectConfig{ModulePath: "example.com/test", BinaryName: "test"},
+        }
+        o := orchestrator.New(cfg)
+    expected:
+      state:
+        project.binary_dir: "bin"
+        generation.prefix: "generation-"
+        cobbler.beads_dir: ".beads/"
+        cobbler.dir: ".cobbler/"
+        project.magefiles_dir: "magefiles"
+        claude.secrets_dir: ".secrets"
+        claude.default_token_file: "claude.json"
+
+  - use_case: rel01.0-uc001-orchestrator-initialization
+    name: New preserves explicitly set Config values
+    inputs:
+      command: |
+        cfg := orchestrator.Config{
+          Project:    orchestrator.ProjectConfig{ModulePath: "example.com/test", BinaryName: "mybin", BinaryDir: "out"},
+          Generation: orchestrator.GenerationConfig{Prefix: "gen-"},
+          Cobbler:    orchestrator.CobblerConfig{BeadsDir: ".issues/"},
+        }
+        o := orchestrator.New(cfg)
+    expected:
+      state:
+        project.binary_dir: "out"
+        generation.prefix: "gen-"
+        cobbler.beads_dir: ".issues/"
+
+  - use_case: rel01.0-uc001-orchestrator-initialization
+    name: New returns non-nil Orchestrator
+    inputs:
+      command: |
+        o := orchestrator.New(orchestrator.Config{
+          Project: orchestrator.ProjectConfig{ModulePath: "example.com/test", BinaryName: "test"},
+        })
+    expected:
+      state:
+        orchestrator_not_nil: true
+
+  - use_case: rel01.0-uc001-orchestrator-initialization
+    name: Init creates beads directory
+    inputs:
+      command: mage init
+    expected:
+      exit_code: 0
+      state:
+        beads_dir_exists: true
+
+  - use_case: rel01.0-uc001-orchestrator-initialization
+    name: FullReset clears all orchestrator state
+    inputs:
+      command: mage reset
+    expected:
+      exit_code: 0
+      state:
+        cobbler.dir_exists: false
+        generation_branches: 0
+
+# ---- uc002: Generation lifecycle from start to stop ----
+
+  - use_case: rel01.0-uc002-generation-lifecycle
+    name: GeneratorStart creates tagged generation branch
+    inputs:
+      command: mage generator:start
+    expected:
+      exit_code: 0
+      state:
+        current_branch_prefix: "generation-"
+        tag_exists_suffix: "-start"
+        go_files_deleted: true
+        go_mod_exists: true
+
+  - use_case: rel01.0-uc002-generation-lifecycle
+    name: GeneratorStart fails when not on main
+    inputs:
+      command: |
+        git checkout -b feature
+        mage generator:start
+    expected:
+      exit_code: 1
+      stderr_contains: "switching to main"
+
+  - use_case: rel01.0-uc002-generation-lifecycle
+    name: GeneratorRun executes configured cycles
+    inputs:
+      command: mage generator:run
+      config_overrides:
+        generation.cycles: 1
+        cobbler.max_measure_issues: 1
+    expected:
+      exit_code: 0
+      stdout_contains: "complete, ran 1 cycle(s)"
+
+  - use_case: rel01.0-uc002-generation-lifecycle
+    name: GeneratorStop merges to main and tags
+    inputs:
+      command: mage generator:stop
+    expected:
+      exit_code: 0
+      state:
+        current_branch: "main"
+        tag_exists_suffix: "-finished"
+        tag_exists_suffix_2: "-merged"
+        generation_branch_deleted: true
+
+  - use_case: rel01.0-uc002-generation-lifecycle
+    name: GeneratorList shows all generations
+    inputs:
+      command: mage generator:list
+    expected:
+      exit_code: 0
+      stdout_contains: "generation-"
+
+  - use_case: rel01.0-uc002-generation-lifecycle
+    name: GeneratorReset returns to clean main
+    inputs:
+      command: mage generator:reset
+    expected:
+      exit_code: 0
+      state:
+        current_branch: "main"
+        generation_branches: 0
+
+  - use_case: rel01.0-uc002-generation-lifecycle
+    name: GeneratorSwitch saves work and changes branch
+    inputs:
+      command: |
+        mage generator:start
+        mage generator:switch
+      config_overrides:
+        generation.branch: main
+    expected:
+      exit_code: 0
+      state:
+        current_branch: "main"
+
+# ---- uc003: Measure workflow task proposal ----
+
+  - use_case: rel01.0-uc003-measure-workflow
+    name: Measure queries existing issues
+    inputs:
+      command: mage cobbler:measure
+      config_overrides:
+        cobbler.max_measure_issues: 3
+    expected:
+      exit_code: 0
+
+  - use_case: rel01.0-uc003-measure-workflow
+    name: Measure fails when beads not initialized
+    inputs:
+      command: |
+        rm -rf .beads
+        mage cobbler:measure
+    expected:
+      exit_code: 1
+      stderr_contains: "beads not initialized"
+
+  - use_case: rel01.0-uc003-measure-workflow
+    name: Measure imports proposed issues into beads
+    inputs:
+      command: |
+        mage cobbler:measure
+        bd list --json
+      config_overrides:
+        cobbler.max_measure_issues: 3
+    expected:
+      exit_code: 0
+      state:
+        issues_created: true
+
+  - use_case: rel01.0-uc003-measure-workflow
+    name: Measure respects max_issues limit
+    inputs:
+      command: mage cobbler:measure
+      config_overrides:
+        cobbler.max_measure_issues: 2
+    expected:
+      exit_code: 0
+      state:
+        issues_count_lte: 2
+
+  - use_case: rel01.0-uc003-measure-workflow
+    name: Measure records InvocationRecord on created issues
+    inputs:
+      command: |
+        mage cobbler:measure
+        bd list --json
+      config_overrides:
+        cobbler.max_measure_issues: 1
+    expected:
+      exit_code: 0
+      state:
+        invocation_record_present: true
+
+# ---- uc004: Stitch workflow task execution ----
+
+  - use_case: rel01.0-uc004-stitch-workflow
+    name: Stitch picks and executes a ready task
+    inputs:
+      command: mage cobbler:stitch
+      config_overrides:
+        cobbler.max_stitch_issues_per_cycle: 1
+    expected:
+      exit_code: 0
+      state:
+        task_closed: true
+        task_branch_deleted: true
+        worktree_cleaned: true
+
+  - use_case: rel01.0-uc004-stitch-workflow
+    name: Stitch fails when beads not initialized
+    inputs:
+      command: |
+        rm -rf .beads
+        mage cobbler:stitch
+    expected:
+      exit_code: 1
+      stderr_contains: "beads not initialized"
+
+  - use_case: rel01.0-uc004-stitch-workflow
+    name: Stitch stops when no ready tasks
+    inputs:
+      command: mage cobbler:stitch
+    expected:
+      exit_code: 0
+      stdout_contains: "completed 0 task(s)"
+
+  - use_case: rel01.0-uc004-stitch-workflow
+    name: Stitch respects max_issues_per_cycle limit
+    inputs:
+      command: mage cobbler:stitch
+      config_overrides:
+        cobbler.max_stitch_issues_per_cycle: 2
+    expected:
+      exit_code: 0
+      state:
+        tasks_executed_lte: 2
+
+  - use_case: rel01.0-uc004-stitch-workflow
+    name: Stitch creates worktree on task branch
+    inputs:
+      command: mage cobbler:stitch
+      config_overrides:
+        cobbler.max_stitch_issues_per_cycle: 1
+    expected:
+      exit_code: 0
+      state:
+        task_branch_pattern: "task/{baseBranch}-*"
+
+  - use_case: rel01.0-uc004-stitch-workflow
+    name: Stitch merges task branch back to base
+    inputs:
+      command: |
+        mage cobbler:stitch
+        git log --oneline -5
+      config_overrides:
+        cobbler.max_stitch_issues_per_cycle: 1
+    expected:
+      exit_code: 0
+      stdout_contains: "Merge branch"
+
+  - use_case: rel01.0-uc004-stitch-workflow
+    name: Stitch records InvocationRecord with diff stats
+    inputs:
+      command: mage cobbler:stitch
+      config_overrides:
+        cobbler.max_stitch_issues_per_cycle: 1
+    expected:
+      exit_code: 0
+      state:
+        invocation_record_has_diff: true
+        invocation_record_has_loc: true
+
+# ---- uc005: Generation resume and task recovery ----
+
+  - use_case: rel01.0-uc005-resume-recovery
+    name: Resume resolves generation branch from configuration
+    inputs:
+      command: mage generator:resume
+      config_overrides:
+        generation.branch: generation-2026-01-01-00-00-00
+        generation.cycles: 0
+    expected:
+      exit_code: 0
+      state:
+        current_branch: "generation-2026-01-01-00-00-00"
+
+  - use_case: rel01.0-uc005-resume-recovery
+    name: Resume auto-detects single generation branch
+    inputs:
+      command: mage generator:resume
+      config_overrides:
+        generation.cycles: 0
+    expected:
+      exit_code: 0
+      state:
+        current_branch_prefix: "generation-"
+
+  - use_case: rel01.0-uc005-resume-recovery
+    name: Resume fails with multiple generation branches
+    inputs:
+      command: |
+        git branch generation-a
+        git branch generation-b
+        mage generator:resume
+      config_overrides:
+        generation.cycles: 0
+    expected:
+      exit_code: 1
+      stderr_contains: "multiple generation branches"
+
+  - use_case: rel01.0-uc005-resume-recovery
+    name: Resume recovers stale task branches
+    inputs:
+      command: |
+        git branch task/generation-test-stale-id
+        mage generator:resume
+      config_overrides:
+        generation.cycles: 0
+    expected:
+      exit_code: 0
+      state:
+        stale_branch_deleted: true
+
+  - use_case: rel01.0-uc005-resume-recovery
+    name: Resume resets orphaned in_progress issues
+    inputs:
+      command: mage generator:resume
+      config_overrides:
+        generation.cycles: 0
+    expected:
+      exit_code: 0
+      state:
+        orphaned_issues_reset: true
+
+  - use_case: rel01.0-uc005-resume-recovery
+    name: Resume commits work before switching branches
+    inputs:
+      command: |
+        echo "test" > uncommitted.txt
+        mage generator:resume
+      config_overrides:
+        generation.cycles: 0
+    expected:
+      exit_code: 0
+      state:
+        uncommitted_work_saved: true
+
+  - use_case: rel01.0-uc005-resume-recovery
+    name: Resume drains ready issues before new cycles
+    inputs:
+      command: mage generator:resume
+      config_overrides:
+        generation.cycles: 1
+        cobbler.max_measure_issues: 1
+    expected:
+      exit_code: 0
+
+cleanup:
+  - Switch to main branch
+  - Delete all generation and task branches
+  - Remove worktrees
+  - Remove cobbler scratch directory
+  - Reset beads

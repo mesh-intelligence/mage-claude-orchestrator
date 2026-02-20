@@ -40,4 +40,3 @@ out_of_scope:
   - Initial generation start (see rel01.0-uc002)
   - Multiple concurrent generations (one at a time)
 
-test_suite: test-rel01.0-uc005-resume-recovery

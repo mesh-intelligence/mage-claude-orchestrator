@@ -61,78 +61,52 @@ use_case_index:
     title: Orchestrator Initialization and Configuration
     release: "01.0"
     status: done
-    test_suite: test-rel01.0-uc001-orchestrator-initialization
     path: specs/use-cases/rel01.0-uc001-orchestrator-initialization.yaml
 
   - id: rel01.0-uc002-generation-lifecycle
     title: Generation Lifecycle from Start to Stop
     release: "01.0"
     status: done
-    test_suite: test-rel01.0-uc002-generation-lifecycle
     path: specs/use-cases/rel01.0-uc002-generation-lifecycle.yaml
 
   - id: rel01.0-uc003-measure-workflow
     title: Measure Workflow Task Proposal
     release: "01.0"
     status: done
-    test_suite: test-rel01.0-uc003-measure-workflow
     path: specs/use-cases/rel01.0-uc003-measure-workflow.yaml
 
   - id: rel01.0-uc004-stitch-workflow
     title: Stitch Workflow Task Execution
     release: "01.0"
     status: done
-    test_suite: test-rel01.0-uc004-stitch-workflow
     path: specs/use-cases/rel01.0-uc004-stitch-workflow.yaml
 
   - id: rel01.0-uc005-resume-recovery
     title: Generation Resume and Task Recovery
     release: "01.0"
     status: done
-    test_suite: test-rel01.0-uc005-resume-recovery
     path: specs/use-cases/rel01.0-uc005-resume-recovery.yaml
 
 test_suite_index:
-  - id: test-rel01.0-uc001-orchestrator-initialization
-    title: Orchestrator initialization and configuration
+  - id: test-rel01.0
+    title: Release 01.0 test suite
+    release: rel01.0
     traces:
       - rel01.0-uc001-orchestrator-initialization
-      - prd001-orchestrator-core
-    test_case_count: 5
-    path: specs/test-suites/test-rel01.0-uc001-orchestrator-initialization.yaml
-
-  - id: test-rel01.0-uc002-generation-lifecycle
-    title: Generation lifecycle from start to stop
-    traces:
       - rel01.0-uc002-generation-lifecycle
-      - prd002-generation-lifecycle
-    test_case_count: 7
-    path: specs/test-suites/test-rel01.0-uc002-generation-lifecycle.yaml
-
-  - id: test-rel01.0-uc003-measure-workflow
-    title: Measure workflow task proposal
-    traces:
       - rel01.0-uc003-measure-workflow
-      - prd003-cobbler-workflows
-    test_case_count: 5
-    path: specs/test-suites/test-rel01.0-uc003-measure-workflow.yaml
-
-  - id: test-rel01.0-uc004-stitch-workflow
-    title: Stitch workflow task execution
-    traces:
       - rel01.0-uc004-stitch-workflow
-      - prd003-cobbler-workflows
-    test_case_count: 7
-    path: specs/test-suites/test-rel01.0-uc004-stitch-workflow.yaml
-
-  - id: test-rel01.0-uc005-resume-recovery
-    title: Generation resume and task recovery
-    traces:
       - rel01.0-uc005-resume-recovery
-      - prd002-generation-lifecycle
-      - prd003-cobbler-workflows
-    test_case_count: 7
-    path: specs/test-suites/test-rel01.0-uc005-resume-recovery.yaml
+    test_case_count: 31
+    path: specs/test-suites/test-rel01.0.yaml
+
+  - id: test-rel02.0
+    title: Release 02.0 test suite
+    release: rel02.0
+    traces:
+      - rel02.0-uc001-lifecycle-commands
+    test_case_count: 9
+    path: specs/test-suites/test-rel02.0.yaml
 
 prd_to_use_case_mapping:
   - use_case: rel01.0-uc001-orchestrator-initialization

@@ -46,4 +46,3 @@ out_of_scope:
   - Claude behavior and code quality (we test the workflow, not Claude output)
   - Task proposal (see rel01.0-uc003)
 
-test_suite: test-rel01.0-uc004-stitch-workflow

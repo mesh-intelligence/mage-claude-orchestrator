@@ -49,7 +49,6 @@ out_of_scope:
   - Issue tracker view implementation (see rel02.0-uc004)
   - Metrics dashboard implementation (see rel02.0-uc005)
 
-test_suite: test-rel02.0-uc001-lifecycle-commands
 
 dependencies:
   - D1: prd006-vscode-extension R1 (lifecycle commands requirements)

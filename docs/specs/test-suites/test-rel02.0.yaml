@@ -1,12 +1,11 @@
 # Copyright (c) 2026 Petar Djukic. All rights reserved.
 # SPDX-License-Identifier: MIT
 
-id: test-rel02.0-uc001-lifecycle-commands
-title: VS Code lifecycle command execution
-
+id: test-rel02.0
+title: Release 02.0 test suite
+release: rel02.0
 traces:
   - rel02.0-uc001-lifecycle-commands
-  - prd006-vscode-extension R1
 
 tags:
   - vscode
@@ -19,8 +18,11 @@ preconditions:
   - Git repository initialized with main branch
   - Beads initialized
 
+# ---- uc001: VS Code lifecycle command execution ----
+
 test_cases:
-  - name: Start command executes mage generator:start
+  - use_case: rel02.0-uc001-lifecycle-commands
+    name: Start command executes mage generator:start
     inputs:
       command: "Open Command Palette and select 'Mage Orchestrator: Start Generation'"
       state:
@@ -34,7 +36,8 @@ test_cases:
         generation_active: true
         views_refreshed: true
 
-  - name: Start command disabled when on generation branch
+  - use_case: rel02.0-uc001-lifecycle-commands
+    name: Start command disabled when on generation branch
     inputs:
       state:
         current_branch: "generation-2026-02-19-10-00-00"
@@ -43,7 +46,8 @@ test_cases:
       command_enabled: false
       reason: "Already on a generation branch"
 
-  - name: Run command executes mage generator:run
+  - use_case: rel02.0-uc001-lifecycle-commands
+    name: Run command executes mage generator:run
     inputs:
       command: "Open Command Palette and select 'Mage Orchestrator: Run Generation'"
       state:
@@ -55,7 +59,8 @@ test_cases:
       state:
         views_refreshed: true
 
-  - name: Resume command executes mage generator:resume
+  - use_case: rel02.0-uc001-lifecycle-commands
+    name: Resume command executes mage generator:resume
     inputs:
       command: "Open Command Palette and select 'Mage Orchestrator: Resume Generation'"
       state:
@@ -65,7 +70,8 @@ test_cases:
       confirmation_shown: false
       terminal_command: "mage generator:resume"
 
-  - name: Stop command shows confirmation before executing
+  - use_case: rel02.0-uc001-lifecycle-commands
+    name: Stop command shows confirmation before executing
     inputs:
       command: "Open Command Palette and select 'Mage Orchestrator: Stop Generation'"
       state:
@@ -80,7 +86,8 @@ test_cases:
         generation_active: false
         views_refreshed: true
 
-  - name: Reset command shows confirmation before executing
+  - use_case: rel02.0-uc001-lifecycle-commands
+    name: Reset command shows confirmation before executing
     inputs:
       command: "Open Command Palette and select 'Mage Orchestrator: Reset Generation'"
       state:
@@ -95,7 +102,8 @@ test_cases:
         generation_active: false
         views_refreshed: true
 
-  - name: Switch command shows generation picker
+  - use_case: rel02.0-uc001-lifecycle-commands
+    name: Switch command shows generation picker
     inputs:
       command: "Open Command Palette and select 'Mage Orchestrator: Switch Generation'"
       state:
@@ -112,7 +120,8 @@ test_cases:
       terminal_args:
         - generation-2026-02-19-10-00-00
 
-  - name: Views refresh after command completion
+  - use_case: rel02.0-uc001-lifecycle-commands
+    name: Views refresh after command completion
     inputs:
       command: "Mage Orchestrator: Start Generation"
       state:
@@ -122,7 +131,8 @@ test_cases:
       issue_tracker_refreshed: true
       config_view_refreshed: false
 
-  - name: Extension handles missing configuration.yaml
+  - use_case: rel02.0-uc001-lifecycle-commands
+    name: Extension handles missing configuration.yaml
     inputs:
       state:
         configuration_yaml_exists: false

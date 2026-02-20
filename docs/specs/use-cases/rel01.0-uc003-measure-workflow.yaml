@@ -41,4 +41,3 @@ out_of_scope:
   - Claude behavior and prompt quality (we test the workflow, not Claude output)
   - Stitch execution of proposed tasks (see rel01.0-uc004)
 
-test_suite: test-rel01.0-uc003-measure-workflow

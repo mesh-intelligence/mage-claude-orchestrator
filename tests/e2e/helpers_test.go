@@ -212,10 +212,13 @@ func gitListBranchesMatching(t *testing.T, dir, substr string) []string {
 	return branches
 }
 
-// countReadyIssues calls bd list in dir and returns the number of ready tasks.
+// countReadyIssues calls bd ready in dir and returns the number of available
+// tasks. Uses the same command the orchestrator uses (bd ready --json --type
+// task) rather than bd list --status ready, since tasks may be in states
+// visible to bd ready (pending, ready) but not to bd list --status ready.
 func countReadyIssues(t *testing.T, dir string) int {
 	t.Helper()
-	cmd := exec.Command("bd", "list", "--json", "--status", "ready", "--type", "task")
+	cmd := exec.Command("bd", "ready", "--json", "--type", "task")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
@@ -226,6 +229,22 @@ func countReadyIssues(t *testing.T, dir string) int {
 		return 0
 	}
 	return len(tasks)
+}
+
+// claudeImage is the container image used for Claude in E2E tests.
+const claudeImage = "localhost/mage-claude-orchestrator:latest"
+
+// setupClaude extracts Claude credentials into the test repo and configures
+// the podman image in configuration.yaml. Call this at the start of every
+// Claude-gated test before running any mage cobbler or generator targets.
+func setupClaude(t *testing.T, dir string) {
+	t.Helper()
+	if err := runMage(t, dir, "credentials"); err != nil {
+		t.Fatalf("setupClaude: mage credentials: %v", err)
+	}
+	writeConfigOverride(t, dir, func(cfg *orchestrator.Config) {
+		cfg.Podman.Image = claudeImage
+	})
 }
 
 // writeConfigOverride reads configuration.yaml in dir using raw YAML unmarshal

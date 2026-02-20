@@ -4,6 +4,7 @@
 package e2e_test
 
 import (
+	"os/exec"
 	"testing"
 
 	"github.com/mesh-intelligence/mage-claude-orchestrator/pkg/orchestrator"
@@ -14,6 +15,7 @@ import (
 func TestCobbler_MeasureCreatesIssues(t *testing.T) {
 	requiresClaude(t)
 	dir := setupRepo(t)
+	setupClaude(t, dir)
 
 	writeConfigOverride(t, dir, func(cfg *orchestrator.Config) {
 		cfg.Cobbler.MaxMeasureIssues = 1
@@ -41,6 +43,7 @@ func TestCobbler_MeasureCreatesIssues(t *testing.T) {
 func TestCobbler_BeadsResetClearsAfterMeasure(t *testing.T) {
 	requiresClaude(t)
 	dir := setupRepo(t)
+	setupClaude(t, dir)
 
 	writeConfigOverride(t, dir, func(cfg *orchestrator.Config) {
 		cfg.Cobbler.MaxMeasureIssues = 1
@@ -69,6 +72,7 @@ func TestCobbler_BeadsResetClearsAfterMeasure(t *testing.T) {
 func TestGenerator_RunOneCycle(t *testing.T) {
 	requiresClaude(t)
 	dir := setupRepo(t)
+	setupClaude(t, dir)
 
 	writeConfigOverride(t, dir, func(cfg *orchestrator.Config) {
 		cfg.Cobbler.MaxMeasureIssues = 1
@@ -102,14 +106,17 @@ func TestGenerator_RunOneCycle(t *testing.T) {
 }
 
 // TestGenerator_Resume verifies that generator:resume recovers from an
-// interrupted run and completes cleanly.
+// interrupted run (switch to main immediately after start, no prior work)
+// and completes cleanly.
 func TestGenerator_Resume(t *testing.T) {
 	requiresClaude(t)
 	dir := setupRepo(t)
+	setupClaude(t, dir)
 
 	writeConfigOverride(t, dir, func(cfg *orchestrator.Config) {
 		cfg.Cobbler.MaxMeasureIssues = 1
 		cfg.Generation.Cycles = 1
+		cfg.Claude.MaxTimeSec = 600 // generous single-measure timeout
 	})
 
 	if err := runMage(t, dir, "reset"); err != nil {
@@ -119,12 +126,7 @@ func TestGenerator_Resume(t *testing.T) {
 		t.Fatalf("generator:start: %v", err)
 	}
 
-	// Measure one issue, then simulate interruption by switching to main.
-	if err := runMage(t, dir, "cobbler:measure"); err != nil {
-		t.Fatalf("cobbler:measure: %v", err)
-	}
-
-	// Switch back to main to simulate interruption.
+	// Simulate interruption immediately after start — no work done yet.
 	writeConfigOverride(t, dir, func(cfg *orchestrator.Config) {
 		cfg.Generation.Branch = "main"
 	})
@@ -144,7 +146,19 @@ func TestGenerator_Resume(t *testing.T) {
 	}
 
 	// Resume runs cycles then stops. If still on a generation branch, stop.
+	// The WIP commit from generator:switch wrote branch="main" to the
+	// generation branch's config. Clear it and commit the fix so that
+	// generator:stop can (a) auto-detect the current branch and (b) checkout
+	// main cleanly without an uncommitted tracked-file conflict.
 	if branch := gitBranch(t, dir); branch != "main" {
+		writeConfigOverride(t, dir, func(cfg *orchestrator.Config) {
+			cfg.Generation.Branch = ""
+		})
+		commitCmd := exec.Command("git", "commit", "-am", "Clear generation.branch after resume")
+		commitCmd.Dir = dir
+		if out, err := commitCmd.CombinedOutput(); err != nil {
+			t.Fatalf("committing config fix: %v\n%s", err, out)
+		}
 		if err := runMage(t, dir, "generator:stop"); err != nil {
 			t.Errorf("generator:stop after resume: %v", err)
 		}

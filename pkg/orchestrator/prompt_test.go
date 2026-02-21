@@ -24,16 +24,20 @@ func TestMeasurePromptIncludesPlanningConstitution(t *testing.T) {
 	}
 }
 
-func TestMeasurePromptOmitsVisionAndArchitectureWhenMissing(t *testing.T) {
+func TestMeasurePromptIncludesProjectContext(t *testing.T) {
 	o := New(Config{})
 	prompt := o.buildMeasurePrompt("", "[]", 5, "/tmp/out.yaml")
 
-	// When VISION.yaml and ARCHITECTURE.yaml don't exist, sections are omitted
-	if strings.Contains(prompt, "## Vision") {
-		t.Error("measure prompt should not include Vision section when file is missing")
+	if !strings.Contains(prompt, "# PROJECT CONTEXT") {
+		t.Error("measure prompt missing '# PROJECT CONTEXT' section")
 	}
-	if strings.Contains(prompt, "## Architecture") {
-		t.Error("measure prompt should not include Architecture section when file is missing")
+	// When run from the test directory (no docs/), the prompt should
+	// still be valid with an empty/minimal project context.
+	if !strings.Contains(prompt, "# TASK") {
+		t.Error("measure prompt missing TASK section")
+	}
+	if !strings.Contains(prompt, "Do NOT read docs/") {
+		t.Error("measure prompt missing instruction to not read docs/ files")
 	}
 }
 

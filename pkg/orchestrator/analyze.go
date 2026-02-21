@@ -4,6 +4,7 @@
 package orchestrator
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ type AnalyzeResult struct {
 	OrphanedTestSuites        []string // Test suites whose traces don't match any known use case
 	BrokenTouchpoints         []string // Use case touchpoints referencing non-existent PRDs
 	UseCasesNotInRoadmap      []string // Use cases not listed in road-map.yaml
+	SchemaErrors              []string // YAML files with fields not matching typed structs
 }
 
 // Analyze performs cross-artifact consistency checks.
@@ -151,6 +153,12 @@ func (o *Orchestrator) Analyze() error {
 		}
 	}
 
+	// Check 6: YAML schema validation — load all docs into typed structs
+	// with strict field checking. Unknown YAML fields indicate a schema
+	// mismatch that will cause data loss during measure prompt assembly.
+	result.SchemaErrors = validateDocSchemas()
+	logf("analyze: schema validation found %d error(s)", len(result.SchemaErrors))
+
 	// Print report
 	hasIssues := false
 	if len(result.OrphanedPRDs) > 0 {
@@ -186,6 +194,13 @@ func (o *Orchestrator) Analyze() error {
 		fmt.Printf("\n⚠️  Use cases not in roadmap:\n")
 		for _, uc := range result.UseCasesNotInRoadmap {
 			fmt.Printf("  - %s\n", uc)
+		}
+	}
+	if len(result.SchemaErrors) > 0 {
+		hasIssues = true
+		fmt.Printf("\n⚠️  YAML schema errors (fields not matching typed structs — data will be lost in measure prompt):\n")
+		for _, se := range result.SchemaErrors {
+			fmt.Printf("  - %s\n", se)
 		}
 	}
 
@@ -293,4 +308,65 @@ func extractUseCaseIDsFromTraces(traces []string) []string {
 		}
 	}
 	return ucs
+}
+
+// validateDocSchemas loads every doc type into its typed struct using
+// strict YAML decoding (KnownFields). Any YAML key that doesn't map to
+// a struct field is reported — these indicate schema drift that causes
+// data loss when assembling the measure prompt.
+func validateDocSchemas() []string {
+	var errs []string
+
+	// Top-level docs.
+	errs = append(errs, validateYAMLStrict[VisionDoc]("docs/VISION.yaml")...)
+	errs = append(errs, validateYAMLStrict[ArchitectureDoc]("docs/ARCHITECTURE.yaml")...)
+	errs = append(errs, validateYAMLStrict[SpecificationsDoc]("docs/SPECIFICATIONS.yaml")...)
+	errs = append(errs, validateYAMLStrict[RoadmapDoc]("docs/road-map.yaml")...)
+
+	// PRDs.
+	if matches, _ := filepath.Glob("docs/specs/product-requirements/prd*.yaml"); matches != nil {
+		for _, p := range matches {
+			errs = append(errs, validateYAMLStrict[PRDDoc](p)...)
+		}
+	}
+
+	// Use cases.
+	if matches, _ := filepath.Glob("docs/specs/use-cases/rel*.yaml"); matches != nil {
+		for _, p := range matches {
+			errs = append(errs, validateYAMLStrict[UseCaseDoc](p)...)
+		}
+	}
+
+	// Test suites.
+	if matches, _ := filepath.Glob("docs/specs/test-suites/test-rel*.yaml"); matches != nil {
+		for _, p := range matches {
+			errs = append(errs, validateYAMLStrict[TestSuiteDoc](p)...)
+		}
+	}
+
+	// Engineering docs.
+	if matches, _ := filepath.Glob("docs/engineering/eng*.yaml"); matches != nil {
+		for _, p := range matches {
+			errs = append(errs, validateYAMLStrict[EngineeringDoc](p)...)
+		}
+	}
+
+	return errs
+}
+
+// validateYAMLStrict reads a YAML file and decodes it into T with
+// KnownFields enabled. Any YAML key not present in the struct is
+// reported as an error. Returns nil if the file doesn't exist.
+func validateYAMLStrict[T any](path string) []string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil // missing file is not a schema error
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	var v T
+	if err := dec.Decode(&v); err != nil {
+		return []string{fmt.Sprintf("%s: %v", path, err)}
+	}
+	return nil
 }

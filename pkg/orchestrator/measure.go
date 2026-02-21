@@ -286,26 +286,13 @@ func countJSONArray(jsonStr string) int {
 
 // MeasurePromptData is the template data for the measure prompt.
 type MeasurePromptData struct {
-	ExistingIssues        string
-	Limit                 int
-	OutputPath            string
-	UserInput             string
-	LinesMin              int
-	LinesMax              int
-	PlanningConstitution  string
-	Vision                string
-	Architecture          string
-}
-
-// readFileOrEmpty reads a file and returns its contents as a string.
-// Returns an empty string if the file does not exist or cannot be read.
-func readFileOrEmpty(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		logf("readFileOrEmpty: %s not found: %v", path, err)
-		return ""
-	}
-	return string(data)
+	ProjectContext       string
+	Limit                int
+	OutputPath           string
+	UserInput            string
+	LinesMin             int
+	LinesMax             int
+	PlanningConstitution string // kept separate — instructions, not just context
 }
 
 func (o *Orchestrator) buildMeasurePrompt(userInput, existingIssues string, limit int, outputPath string) string {
@@ -320,20 +307,25 @@ func (o *Orchestrator) buildMeasurePrompt(userInput, existingIssues string, limi
 	if planningConst == "" {
 		planningConst = planningConstitution
 	}
+
+	projectCtx, err := buildProjectContext(existingIssues)
+	if err != nil {
+		logf("buildMeasurePrompt: buildProjectContext error: %v", err)
+		projectCtx = "# Error building project context\n"
+	}
+
 	data := MeasurePromptData{
-		ExistingIssues:       existingIssues,
+		ProjectContext:       projectCtx,
 		Limit:                limit,
 		OutputPath:           outputPath,
 		UserInput:            userInput,
 		LinesMin:             o.cfg.Cobbler.EstimatedLinesMin,
 		LinesMax:             o.cfg.Cobbler.EstimatedLinesMax,
 		PlanningConstitution: planningConst,
-		Vision:               readFileOrEmpty("docs/VISION.yaml"),
-		Architecture:         readFileOrEmpty("docs/ARCHITECTURE.yaml"),
 	}
 
-	logf("buildMeasurePrompt: existingIssues=%d limit=%d userInput=%v",
-		countJSONArray(existingIssues), limit, userInput != "")
+	logf("buildMeasurePrompt: projectCtx=%d bytes limit=%d userInput=%v",
+		len(projectCtx), limit, userInput != "")
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		panic(fmt.Sprintf("measure prompt template: %v", err))

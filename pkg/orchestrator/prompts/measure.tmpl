@@ -4,21 +4,12 @@ You are a software architect planning work for an AI code generation pipeline. E
 
 ---
 
-# CONTEXT
-{{- if .Vision}}
+# PROJECT CONTEXT
 
-## Vision
-
-```yaml
-{{.Vision}}```
-{{- end}}
-{{- if .Architecture}}
-
-## Architecture
+All project documentation, specifications, roadmap, and existing issues are provided below. Do NOT read docs/ files with tools — they are already included.
 
 ```yaml
-{{.Architecture}}```
-{{- end}}
+{{.ProjectContext}}```
 {{- if .PlanningConstitution}}
 
 ## Planning Constitution
@@ -29,33 +20,25 @@ The planning constitution governs how you break down work and propose tasks:
 {{.PlanningConstitution}}```
 {{- end}}
 
-## Existing Issues
-
-The following issues already exist in the system:
-
-```json
-{{.ExistingIssues}}
-```
-
 ---
 
 # TASK
 
 Follow these steps in order. Complete each step before moving to the next.
 
-1. **Read and analyze** — The vision and architecture are provided above. Read road-map.yaml, docs/specs/product-requirements/, docs/specs/use-cases/, docs/specs/test-suites/ (release-level YAML specs), tests/ (generated Go tests), and docs/engineering/ if they exist. Do not skip any of these files.
+1. **Analyze project context** — Review the project context above. All documentation, specifications, roadmap, engineering guidelines, constitutions, and existing issues are included inline. Do NOT read docs/ files with tools — they are already provided.
 
 2. **Summarize project state** — Write a summary of:
    - What problem this project solves
    - The high-level architecture (major components and how they fit together)
    - Current state of implementation (what is done, what is in progress)
-   - Current release: which release we are working on, which use cases remain (check road-map.yaml)
+   - Current release: which release we are working on, which use cases remain (check the roadmap)
    - Current repo size: run `mage stats` and include its output (Go production/test LOC, doc words)
 
 3. **Reason about priorities** — Determine what to build next using release priority:
-   - Focus on the earliest incomplete release in road-map.yaml
+   - Focus on the earliest incomplete release in the roadmap
    - Later use cases can be partially implemented if they share functionality with the current release
-   - Each issue should map to a use case in road-map.yaml; if uncertain, use release 99.0 (unscheduled)
+   - Each issue should map to a use case in the roadmap; if uncertain, use release 99.0 (unscheduled)
    - Identify dependencies: what must be built first and why
 
 4. **Propose tasks** — For each task, write a description that follows the crumb-format YAML schema (see Planning Constitution above and Output Format below). Remember: the stitch agent sees ONLY the task description and the execution constitution. It does not see your analysis, the existing issues, or this conversation. The description must be self-contained.
@@ -66,8 +49,9 @@ Follow these steps in order. Complete each step before moving to the next.
 
 # CONSTRAINTS
 
-- Do NOT use bd or cupboard commands. Write the tasks to `{{.OutputPath}}` using the Write tool.
-- Do NOT duplicate existing issues. Review the existing issues list above before proposing.
+- Do NOT interact with the issue tracker directly. Write the tasks to `{{.OutputPath}}` using the Write tool.
+- Do NOT read docs/ files with tools. All documentation is provided in the project context above.
+- Do NOT duplicate existing issues. Review the issues in the project context above before proposing.
 - Do NOT exceed {{.Limit}} tasks. If more work is needed, create additional tasks in a future session.
 - Do NOT create tasks larger than {{.LinesMax}} lines of production code. Target {{.LinesMin}}-{{.LinesMax}} lines per task, touching 5-7 files. Split aggressively: a task that creates a struct and implements its methods is two tasks.
 - Each task MUST be independently executable by an agent that has no context beyond the task description and the execution constitution.

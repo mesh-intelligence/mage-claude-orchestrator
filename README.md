@@ -125,7 +125,7 @@ mage test:integration
 
 # Full E2E suite including Claude-gated tests (requires podman image and credentials)
 mage credentials   # extract Claude credentials from macOS Keychain
-mage test:e2e      # sets E2E_CLAUDE=1 automatically
+mage test:generatorE2E # sets E2E_CLAUDE=1 automatically
 
 # Build, lint, install
 mage build

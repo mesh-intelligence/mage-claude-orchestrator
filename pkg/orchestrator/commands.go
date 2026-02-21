@@ -130,11 +130,11 @@ func gitStageDir(dir string) error {
 }
 
 func gitCommit(msg string) error {
-	return exec.Command(binGit, "commit", "-m", msg).Run()
+	return exec.Command(binGit, "commit", "--no-verify", "-m", msg).Run()
 }
 
 func gitCommitAllowEmpty(msg string) error {
-	return exec.Command(binGit, "commit", "-m", msg, "--allow-empty").Run()
+	return exec.Command(binGit, "commit", "--no-verify", "-m", msg, "--allow-empty").Run()
 }
 
 func gitRevParseHEAD() (string, error) {

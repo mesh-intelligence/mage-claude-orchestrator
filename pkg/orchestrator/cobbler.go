@@ -79,14 +79,15 @@ func recordInvocation(issueID string, rec InvocationRecord) {
 // of Claude stream-json events (tool calls, result) via logf(). All bytes
 // pass through to the underlying buffer unchanged.
 type progressWriter struct {
-	buf     *bytes.Buffer
-	start   time.Time
-	partial []byte
-	turn    int
+	buf      *bytes.Buffer
+	start    time.Time
+	lastEvent time.Time
+	partial  []byte
+	turn     int
 }
 
 func newProgressWriter(dst *bytes.Buffer, start time.Time) *progressWriter {
-	return &progressWriter{buf: dst, start: start}
+	return &progressWriter{buf: dst, start: start, lastEvent: start}
 }
 
 func (pw *progressWriter) Write(p []byte) (int, error) {
@@ -130,17 +131,14 @@ func (pw *progressWriter) logLine(line []byte) {
 	if json.Unmarshal(line, &msg) != nil {
 		return
 	}
-	elapsed := time.Since(pw.start).Round(time.Second)
+	now := time.Now()
+	step := now.Sub(pw.lastEvent).Round(time.Second)
+	total := now.Sub(pw.start).Round(time.Second)
+	pw.lastEvent = now
+
 	switch msg.Type {
 	case "assistant":
 		pw.turn++
-		// Count tools in this turn.
-		nTools := 0
-		for _, b := range msg.Message.Content {
-			if b.Type == "tool_use" {
-				nTools++
-			}
-		}
 		// Log a brief text snippet from the first text block.
 		for _, b := range msg.Message.Content {
 			if b.Type == "text" && b.Text != "" {
@@ -148,20 +146,19 @@ func (pw *progressWriter) logLine(line []byte) {
 				if len(snippet) > 120 {
 					snippet = snippet[:120] + "..."
 				}
-				// Replace newlines for single-line logging.
 				snippet = strings.ReplaceAll(snippet, "\n", " ")
-				logf("[%s] turn %d: %s", elapsed, pw.turn, snippet)
+				logf("[%s +%s] turn %d: %s", total, step, pw.turn, snippet)
 				break
 			}
 		}
 		// Log each tool call.
 		for _, b := range msg.Message.Content {
 			if b.Type == "tool_use" {
-				logf("[%s] turn %d: tool %s %s", elapsed, pw.turn, b.Name, toolSummary(b.Input))
+				logf("[%s] turn %d: tool %s %s", total, pw.turn, b.Name, toolSummary(b.Input))
 			}
 		}
 	case "result":
-		logf("[%s] done: %d turn(s), tokens(in=%d out=%d)", elapsed, pw.turn,
+		logf("[%s] done: %d turn(s), tokens(in=%d out=%d)", total, pw.turn,
 			msg.Usage.InputTokens, msg.Usage.OutputTokens)
 	}
 }

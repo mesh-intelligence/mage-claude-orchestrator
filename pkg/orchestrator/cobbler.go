@@ -161,6 +161,13 @@ func clearClaudeHistory() {
 func (o *Orchestrator) runClaude(prompt, dir string, silence bool) (ClaudeResult, error) {
 	logf("runClaude: promptLen=%d dir=%q silence=%v", len(prompt), dir, silence)
 
+	// Refresh credentials from macOS Keychain before each invocation.
+	// OAuth tokens expire periodically; extracting just before launch
+	// ensures the container always gets a valid token.
+	if err := o.ExtractCredentials(); err != nil {
+		logf("runClaude: credential refresh warning: %v", err)
+	}
+
 	clearClaudeHistory()
 
 	workDir := dir

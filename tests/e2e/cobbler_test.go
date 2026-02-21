@@ -171,3 +171,52 @@ func TestGenerator_Resume(t *testing.T) {
 		t.Errorf("expected no generation branches after resume+stop, got %v", branches)
 	}
 }
+
+// TestGenerator_Stitch100 runs a full generation with 100 stitch iterations.
+// Measure creates 5 issues per pass (500-1000 LOC each); stitch processes up
+// to 10 per cycle; the generator runs until 100 total tasks are stitched or
+// all issues are closed, whichever comes first.
+//
+// This is a stress test. At ~3-4 min per Claude invocation it takes several
+// hours. Run it explicitly:
+//
+//	E2E_CLAUDE=1 go test -v -count=1 -timeout 0 -run TestGenerator_Stitch100 ./tests/e2e/...
+func TestGenerator_Stitch100(t *testing.T) {
+	requiresClaude(t)
+	dir := setupRepo(t)
+	setupClaude(t, dir)
+
+	writeConfigOverride(t, dir, func(cfg *orchestrator.Config) {
+		cfg.Cobbler.MaxMeasureIssues = 5
+		cfg.Cobbler.EstimatedLinesMin = 500
+		cfg.Cobbler.EstimatedLinesMax = 1000
+		cfg.Cobbler.MaxStitchIssues = 100
+		cfg.Cobbler.MaxStitchIssuesPerCycle = 10
+		cfg.Claude.MaxTimeSec = 600
+	})
+
+	if err := runMage(t, dir, "reset"); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if err := runMage(t, dir, "generator:start"); err != nil {
+		t.Fatalf("generator:start: %v", err)
+	}
+	genBranch := gitBranch(t, dir)
+
+	if err := runMage(t, dir, "generator:run"); err != nil {
+		t.Fatalf("generator:run: %v", err)
+	}
+	if err := runMage(t, dir, "generator:stop"); err != nil {
+		t.Fatalf("generator:stop: %v", err)
+	}
+
+	if branch := gitBranch(t, dir); branch != "main" {
+		t.Errorf("expected main after stop, got %q", branch)
+	}
+	for _, suffix := range []string{"-start", "-finished", "-merged"} {
+		tag := genBranch + suffix
+		if !gitTagExists(t, dir, tag) {
+			t.Errorf("expected tag %q to exist after stop", tag)
+		}
+	}
+}

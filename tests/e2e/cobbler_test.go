@@ -4,8 +4,10 @@
 package e2e_test
 
 import (
+	"fmt"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/mesh-intelligence/mage-claude-orchestrator/pkg/orchestrator"
 )
@@ -169,6 +171,49 @@ func TestGenerator_Resume(t *testing.T) {
 	}
 	if branches := gitListBranchesMatching(t, dir, "generation-"); len(branches) > 0 {
 		t.Errorf("expected no generation branches after resume+stop, got %v", branches)
+	}
+}
+
+// TestMeasure_TimingByLimit runs measure with limits 1 through 5 and logs
+// the wall-clock time and issue count for each. All five runs share a single
+// scaffolded repo (reset+init once) so the only variable is the limit.
+//
+//	E2E_CLAUDE=1 go test -v -count=1 -timeout 0 -run TestMeasure_TimingByLimit ./tests/e2e/...
+func TestMeasure_TimingByLimit(t *testing.T) {
+	requiresClaude(t)
+	dir := setupRepo(t)
+	setupClaude(t, dir)
+
+	if err := runMage(t, dir, "reset"); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if err := runMage(t, dir, "init"); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	for limit := 1; limit <= 5; limit++ {
+		t.Run(fmt.Sprintf("limit_%d", limit), func(t *testing.T) {
+			// Reset beads between runs so each starts with zero issues.
+			if err := runMage(t, dir, "beads:reset"); err != nil {
+				t.Fatalf("beads:reset: %v", err)
+			}
+			if err := runMage(t, dir, "init"); err != nil {
+				t.Fatalf("init: %v", err)
+			}
+
+			writeConfigOverride(t, dir, func(cfg *orchestrator.Config) {
+				cfg.Cobbler.MaxMeasureIssues = limit
+			})
+
+			start := time.Now()
+			if err := runMage(t, dir, "cobbler:measure"); err != nil {
+				t.Fatalf("cobbler:measure (limit=%d): %v", limit, err)
+			}
+			elapsed := time.Since(start).Round(time.Second)
+
+			n := countReadyIssues(t, dir)
+			t.Logf("limit=%d issues=%d time=%s", limit, n, elapsed)
+		})
 	}
 }
 

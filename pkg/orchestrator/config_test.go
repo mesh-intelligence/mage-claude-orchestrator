@@ -124,6 +124,9 @@ func TestLoadConfig_AppliesDefaults(t *testing.T) {
 	if len(cfg.Claude.Args) == 0 {
 		t.Error("Claude.Args default: expected non-empty default args")
 	}
+	if cfg.Cobbler.HistoryDir != "history" {
+		t.Errorf("Cobbler.HistoryDir default: got %q, want \"history\"", cfg.Cobbler.HistoryDir)
+	}
 }
 
 func TestLoadConfig_ConstitutionFileOverride(t *testing.T) {

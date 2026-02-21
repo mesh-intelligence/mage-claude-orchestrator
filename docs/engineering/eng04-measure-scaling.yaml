@@ -1,0 +1,266 @@
+# Copyright (c) 2026 Petar Djukic. All rights reserved.
+# SPDX-License-Identifier: MIT
+
+id: eng04-measure-scaling
+title: Measure Prompt Scaling and Iterative Strategy
+
+introduction: |
+  This guideline documents empirical findings from benchmarking the measure
+  workflow at varying issue limits. Two benchmark rounds are recorded: the
+  original batch approach (one Claude call requesting N issues) and the
+  iterative approach (N sequential calls requesting 1 issue each).
+
+  The key discovery is that extended thinking time scales super-linearly with
+  the number of requested issues in a single call, making single-issue
+  iterative calls more efficient than batch requests. The iterative approach
+  converts batch timeouts into linear, predictable completion.
+
+sections:
+  - title: Context Injection Optimization
+    content: |
+      Before these benchmarks, the measure prompt required Claude to spend
+      multiple turns reading project documentation and source code via tool
+      calls. A typical measure invocation took 40-51 turns, with the majority
+      spent on file reads.
+
+      The optimization injects all project context (vision, architecture, PRDs,
+      specs, source code, existing issues) directly into the prompt as structured
+      YAML via `buildProjectContext`. This reduced turns from ~51 to 2-4, with
+      Claude spending its turns on analysis and output rather than file reading.
+
+      The same optimization was applied to the stitch prompt: source code and
+      docs are injected from the worktree directory so the stitch agent starts
+      implementing immediately rather than spending turns discovering the codebase.
+
+  - title: Batch Benchmark Results (Original)
+    content: |
+      Test: `TestMeasure_TimingByLimit` against go-unix-utils (v0.20260220.2).
+      Single Claude call requesting N issues simultaneously. Each run starts
+      from a clean beads state with zero existing issues.
+      Default `ClaudeMaxTimeSec=300` (5 minutes).
+
+      | Limit | Result | Wall Time | Claude Time | Turns | Output Tokens | Issues |
+      |-------|--------|-----------|-------------|-------|---------------|--------|
+      | 1     | PASS   | 1m28s     | 1m20s       | 3     | ~3,230        | 1      |
+      | 2     | PASS   | 5m06s     | 4m57s       | 4     | ~14,901       | 2      |
+      | 3     | FAIL   | 5m00s     | timeout     | -     | -             | 0      |
+      | 4     | FAIL   | 5m00s     | timeout     | -     | -             | 0      |
+      | 5     | FAIL   | 5m00s     | timeout     | -     | -             | 0      |
+
+      Token reporting was unreliable during these benchmarks (see Token
+      Reporting section). Output token counts are approximate.
+
+  - title: Batch Analysis
+    content: |
+      ### Super-Linear Scaling
+
+      Going from limit=1 to limit=2, wall time increased 3.5x (1m28s to 5m06s)
+      while the output (YAML) roughly doubled. The disproportionate time increase
+      is caused by extended thinking: Claude spends more time reasoning about
+      inter-task dependencies, ordering, and scope boundaries when producing
+      multiple issues simultaneously.
+
+      Output tokens increased ~4.6x (3,230 to 14,901) for a 2x increase in
+      issues. Extended thinking tokens (invisible in the output but counted in
+      the token budget) scale super-linearly with task complexity.
+
+      ### Timeout Cliff
+
+      At limit >= 3, Claude consistently exceeds the 5-minute timeout without
+      completing even its first output turn. The thinking phase alone exceeds
+      the timeout budget. Increasing the timeout would help but at diminishing
+      returns — the thinking time appears to grow polynomially with issue count.
+
+  - title: Iterative Measure Strategy
+    content: |
+      Based on the batch findings, the measure workflow uses an iterative
+      approach:
+
+      1. Build prompt with all existing issues and limit=1
+      2. Call Claude to propose exactly one new issue
+      3. Import the issue into beads
+      4. Repeat from step 1 until the desired number of issues is reached
+
+      ### Advantages
+
+      - **Predictable timing**: Each call takes ~1.5-2.5 minutes regardless of
+        total issue count
+      - **No timeout risk**: Single-issue calls stay well within the 5-minute
+        default timeout
+      - **Better context**: Each subsequent call sees the previously created
+        issues, so Claude naturally avoids duplicates and can reason about
+        dependencies relative to what already exists
+      - **Incremental progress**: If a call fails, previously created issues
+        are preserved in beads
+      - **Linear scaling**: Total time scales linearly with issue count
+        (N * ~2 min) rather than super-linearly
+
+      ### Trade-offs
+
+      - Input tokens are sent N times (once per call). With prompt caching,
+        the cache read ratio is ~58%, so the marginal input cost of repeated
+        calls is lower than the raw token count suggests.
+      - Each call requires beads import and prompt rebuild overhead (~2-5s),
+        which is negligible compared to the Claude invocation time.
+
+  - title: Iterative Benchmark Results
+    content: |
+      Test: `TestMeasure_TimingByLimit` against go-unix-utils (v0.20260220.2).
+      Iterative strategy: N sequential Claude calls, each requesting 1 issue.
+      Each run starts from a clean beads state. Model: claude-opus-4-6.
+      Default `ClaudeMaxTimeSec=300` (5 minutes). Date: 2026-02-21.
+
+      ### Summary
+
+      | Limit | Result | Wall Time | Issues | Total Cost | Avg Cost/Issue | Avg Time/Call |
+      |-------|--------|-----------|--------|------------|----------------|---------------|
+      | 1     | PASS   | 1m46s     | 1      | $0.71      | $0.71          | 1m41s         |
+      | 2     | PASS   | 3m34s     | 2      | $1.38      | $0.69          | 1m44s         |
+      | 3     | PASS   | 7m27s     | 3      | $2.27      | $0.76          | 2m27s         |
+      | 4     | PASS   | 10m59s    | 4      | $3.30      | $0.82          | 2m42s         |
+      | 5     | PASS   | 14m19s    | 5      | $4.15      | $0.83          | 2m48s         |
+
+      All five limits pass. The batch approach timed out at limit >= 3;
+      the iterative approach completes all five with linear scaling.
+
+      ### Per-Iteration Detail (limit=5)
+
+      | Iter | Time  | Input Tokens | Cache Create | Cache Read | Output | Cost   | Prompt Size |
+      |------|-------|-------------|-------------|------------|--------|--------|-------------|
+      | 1    | 1m43s | 192,659     | 80,043      | 112,613    | 4,744  | $0.68  | 321KB       |
+      | 2    | 3m48s | 204,079     | 89,262      | 114,814    | 11,908 | $0.91  | 330KB       |
+      | 3    | 2m41s | 207,038     | 88,473      | 118,562    | 7,345  | $0.80  | 343KB       |
+      | 4    | 2m8s  | 212,845     | 90,638      | 122,204    | 5,738  | $0.77  | 357KB       |
+      | 5    | 3m47s | 226,420     | 100,492     | 125,925    | 12,149 | $0.99  | 370KB       |
+
+      The prompt grows ~8-14KB per iteration as existing issues are appended
+      to the context. Later iterations have higher input token counts because
+      the prompt includes all previously created issues.
+
+  - title: Token Usage Analysis
+    content: |
+      ### Claude Code Token Reporting Structure
+
+      Claude Code's `result` event in stream-json mode reports token usage in
+      the `usage` field with the following structure:
+
+      ```json
+      {
+        "input_tokens": 3,
+        "cache_creation_input_tokens": 84803,
+        "cache_read_input_tokens": 108095,
+        "output_tokens": 4879
+      }
+      ```
+
+      The `input_tokens` field reports only non-cached base tokens (always 3
+      in practice). The true total input is the sum of all three input fields:
+      `input_tokens + cache_creation_input_tokens + cache_read_input_tokens`.
+
+      The `parseClaudeTokens` function was updated to sum all three fields and
+      report the breakdown in logs.
+
+      ### Prompt Caching Behavior
+
+      | Metric | Typical Value | Notes |
+      |--------|---------------|-------|
+      | Total input tokens | 193K-226K | Grows with existing issue count |
+      | Base (non-cached) | 3 | Negligible; virtually everything is cached |
+      | Cache creation | 80K-100K (41-44%) | Portions of the prompt not yet in cache |
+      | Cache read | 108K-126K (56-59%) | Portions served from cache |
+      | Output tokens | 4K-12K | Varies with task complexity |
+      | Cost per call | $0.65-$0.99 | Average ~$0.76 |
+
+      Cache creation tokens represent the portion of the prompt that Claude
+      caches for subsequent requests. Cache read tokens are served from cache
+      at reduced cost. The 5-minute ephemeral cache window means that calls
+      within the same measure run benefit from cache reads, reducing effective
+      input cost.
+
+      ### Cost Breakdown
+
+      At Anthropic's claude-opus-4-6 pricing:
+      - Cache read input tokens cost less than fresh input tokens
+      - Cache creation input tokens cost more than fresh input but amortize
+        over subsequent reads within the 5-minute window
+      - Output tokens (including extended thinking) dominate per-call cost
+      - The `total_cost_usd` field from the result event provides the
+        authoritative cost, reported by the API
+
+      ### Cost Scaling
+
+      | Issues | Total Cost | Cost/Issue | Comparison to Batch |
+      |--------|------------|------------|---------------------|
+      | 1      | $0.71      | $0.71      | Same (single call)  |
+      | 2      | $1.38      | $0.69      | Batch was ~$0.73 but took 5m06s |
+      | 3      | $2.27      | $0.76      | Batch timed out     |
+      | 4      | $3.30      | $0.82      | Batch timed out     |
+      | 5      | $4.15      | $0.83      | Batch timed out     |
+
+      The per-issue cost increases slightly as the issue count grows because
+      later iterations include more existing issues in the prompt (increasing
+      both input token count and Claude's thinking time). The increase is
+      modest: $0.71 for the first issue vs $0.83 average at 5 issues.
+
+      ### Thinking Time Variability
+
+      Individual call times vary between 1m29s and 3m48s. This variability is
+      driven by extended thinking duration, which depends on:
+      - Number of existing issues in context (more issues = more reasoning
+        about what is already covered and what to propose next)
+      - Complexity of the proposed task (detailed descriptions with many
+        requirements take longer to compose)
+      - Output token count (ranges from 4K to 12K per call)
+
+      The 5-minute timeout provides comfortable headroom even for the slowest
+      observed call (3m48s).
+
+  - title: Prompt Size Growth
+    content: |
+      The base measure prompt (no existing issues) is ~321KB (~193K tokens).
+      Each existing issue adds approximately 4-14KB to the prompt depending on
+      description length. At 5 existing issues, the prompt grows to ~370KB
+      (~226K tokens).
+
+      The prompt remains well within Claude's 200K token context window for
+      typical measure runs of 1-10 issues. At ~14KB per issue growth, the
+      theoretical limit before exceeding the context window is approximately
+      100+ issues, which is far beyond practical use.
+
+      | Iteration | Existing Issues | Prompt Size | Input Tokens |
+      |-----------|----------------|-------------|--------------|
+      | 1         | 0              | 321KB       | ~193K        |
+      | 2         | 1-2            | 330KB       | ~200K        |
+      | 3         | 2-3            | 343KB       | ~207K        |
+      | 4         | 3-4            | 355KB       | ~212K        |
+      | 5         | 4-5            | 370KB       | ~226K        |
+
+  - title: Recommended Configuration
+    content: |
+      Based on both benchmark rounds:
+
+      | Setting | Recommended Value | Rationale |
+      |---------|-------------------|-----------|
+      | `max_measure_issues` | 1-5 | Number of issues per measure pass (iterated internally) |
+      | `max_time_sec` | 300 (5 min) | Comfortable for single-issue measure calls; slowest observed was 3m48s |
+      | `estimated_lines_min` | 250 | Default task scope |
+      | `estimated_lines_max` | 350 | Default task scope |
+
+      ### Cost Expectations
+
+      | Issues Requested | Expected Cost | Expected Wall Time |
+      |-----------------|---------------|-------------------|
+      | 1               | ~$0.71        | ~2 min            |
+      | 3               | ~$2.30        | ~7 min            |
+      | 5               | ~$4.15        | ~14 min           |
+      | 10              | ~$9-10        | ~25-30 min        |
+
+      For stress tests or large-scale generation, use higher `max_measure_issues`
+      values. The iterative strategy ensures each individual call completes
+      within the timeout regardless of the total count.
+
+references:
+  - eng02-prompt-templates
+  - prd003-cobbler-workflows
+  - prd005-metrics-collection
+  - tests/e2e/cobbler_test.go (TestMeasure_TimingByLimit)

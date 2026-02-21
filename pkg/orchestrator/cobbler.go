@@ -17,9 +17,16 @@ import (
 )
 
 // ClaudeResult holds token usage from a Claude invocation.
+// InputTokens is the total input (non-cached + cache creation + cache read).
+// CacheCreationTokens and CacheReadTokens break down how the input was served.
+// RawOutput contains the full stream-json output from Claude for history.
 type ClaudeResult struct {
-	InputTokens  int
-	OutputTokens int
+	InputTokens         int
+	OutputTokens        int
+	CacheCreationTokens int
+	CacheReadTokens     int
+	CostUSD             float64
+	RawOutput           []byte
 }
 
 // LocSnapshot holds a point-in-time LOC count.
@@ -52,8 +59,11 @@ type InvocationRecord struct {
 }
 
 type claudeTokens struct {
-	Input  int `json:"input"`
-	Output int `json:"output"`
+	Input         int     `json:"input"`
+	Output        int     `json:"output"`
+	CacheCreation int     `json:"cache_creation"`
+	CacheRead     int     `json:"cache_read"`
+	CostUSD       float64 `json:"cost_usd"`
 }
 
 type diffRecord struct {
@@ -128,9 +138,12 @@ func (pw *progressWriter) logLine(line []byte) {
 				Input json.RawMessage `json:"input"`
 			} `json:"content"`
 		} `json:"message"`
-		Usage struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
+		TotalCostUSD float64 `json:"total_cost_usd"`
+		Usage        struct {
+			InputTokens              int `json:"input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 		} `json:"usage"`
 	}
 	if json.Unmarshal(line, &msg) != nil {
@@ -175,8 +188,11 @@ func (pw *progressWriter) logLine(line []byte) {
 	case "system":
 		logf("[%s] claude ready", total)
 	case "result":
-		logf("[%s] done: %d turn(s), tokens(in=%d out=%d)", total, pw.turn,
-			msg.Usage.InputTokens, msg.Usage.OutputTokens)
+		u := msg.Usage
+		totalIn := u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+		logf("[%s] done: %d turn(s), in=%d (base=%d cache_create=%d cache_read=%d) out=%d cost=$%.4f",
+			total, pw.turn, totalIn, u.InputTokens, u.CacheCreationInputTokens,
+			u.CacheReadInputTokens, u.OutputTokens, msg.TotalCostUSD)
 	}
 }
 
@@ -207,27 +223,55 @@ func toolSummary(input json.RawMessage) string {
 	return ""
 }
 
-// parseClaudeTokens extracts token usage from Claude's stream-json
-// output. The final JSON line has "type":"result" with a "usage" object
-// containing "input_tokens" and "output_tokens".
+// parseClaudeTokens extracts token usage from Claude's stream-json output.
+// It scans backwards for the "result" event and parses the usage object,
+// which includes cache_creation_input_tokens and cache_read_input_tokens
+// in addition to the base input_tokens and output_tokens.
+//
+// The total input tokens is: input_tokens + cache_creation + cache_read.
 func parseClaudeTokens(output []byte) ClaudeResult {
 	lines := bytes.Split(bytes.TrimSpace(output), []byte("\n"))
 	for i := len(lines) - 1; i >= 0; i-- {
-		var msg struct {
-			Type  string `json:"type"`
-			Usage struct {
-				InputTokens  int `json:"input_tokens"`
-				OutputTokens int `json:"output_tokens"`
-			} `json:"usage"`
-		}
-		if err := json.Unmarshal(lines[i], &msg); err != nil {
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(lines[i], &raw); err != nil {
 			continue
 		}
-		if msg.Type == "result" {
-			return ClaudeResult{
-				InputTokens:  msg.Usage.InputTokens,
-				OutputTokens: msg.Usage.OutputTokens,
-			}
+		typeField, ok := raw["type"]
+		if !ok {
+			continue
+		}
+		var eventType string
+		if json.Unmarshal(typeField, &eventType) != nil || eventType != "result" {
+			continue
+		}
+
+		var result struct {
+			TotalCostUSD float64 `json:"total_cost_usd"`
+			Usage        struct {
+				InputTokens              int `json:"input_tokens"`
+				OutputTokens             int `json:"output_tokens"`
+				CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+				CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+			} `json:"usage"`
+		}
+		if err := json.Unmarshal(lines[i], &result); err != nil {
+			logf("parseClaudeTokens: unmarshal error: %v", err)
+			return ClaudeResult{}
+		}
+
+		u := result.Usage
+		totalInput := u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+
+		logf("parseClaudeTokens: in=%d (base=%d cache_create=%d cache_read=%d) out=%d cost=$%.4f",
+			totalInput, u.InputTokens, u.CacheCreationInputTokens, u.CacheReadInputTokens,
+			u.OutputTokens, result.TotalCostUSD)
+
+		return ClaudeResult{
+			InputTokens:         totalInput,
+			OutputTokens:        u.OutputTokens,
+			CacheCreationTokens: u.CacheCreationInputTokens,
+			CacheReadTokens:     u.CacheReadInputTokens,
+			CostUSD:             result.TotalCostUSD,
 		}
 	}
 	return ClaudeResult{}
@@ -335,9 +379,14 @@ func (o *Orchestrator) runClaude(prompt, dir string, silence bool) (ClaudeResult
 		return ClaudeResult{}, fmt.Errorf("claude max time exceeded (%s)", timeout)
 	}
 
-	result := parseClaudeTokens(stdoutBuf.Bytes())
-	logf("runClaude: finished in %s tokens(in=%d out=%d) (err=%v)",
-		time.Since(start).Round(time.Second), result.InputTokens, result.OutputTokens, err)
+	rawOutput := stdoutBuf.Bytes()
+	result := parseClaudeTokens(rawOutput)
+	result.RawOutput = make([]byte, len(rawOutput))
+	copy(result.RawOutput, rawOutput)
+	logf("runClaude: finished in %s in=%d (cache_create=%d cache_read=%d) out=%d cost=$%.4f (err=%v)",
+		time.Since(start).Round(time.Second), result.InputTokens,
+		result.CacheCreationTokens, result.CacheReadTokens,
+		result.OutputTokens, result.CostUSD, err)
 	return result, err
 }
 

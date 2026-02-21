@@ -37,22 +37,21 @@ sections:
 
       | Field | Type | Source |
       |-------|------|--------|
-      | ExistingIssues | string (JSON) | bd list output |
-      | Limit | int | Config.MaxMeasureIssues |
+      | ProjectContext | string (YAML) | buildProjectContext — docs, source code, existing issues |
+      | Limit | int | Always 1 (iterative measure calls Claude once per issue) |
       | OutputPath | string | Computed file path in Config.CobblerDir |
       | UserInput | string | Config.UserPrompt |
       | LinesMin | int | Config.EstimatedLinesMin |
       | LinesMax | int | Config.EstimatedLinesMax |
       | PlanningConstitution | string | Embedded planning.yaml constitution |
-      | Vision | string | Content of docs/VISION.yaml |
-      | Architecture | string | Content of docs/ARCHITECTURE.yaml |
 
-      The measure template receives a JSON string of existing issues. We render
-      it inline in the prompt so Claude sees the full issue tracker state. The
-      Limit field tells Claude how many tasks to propose. The OutputPath is
-      where Claude writes its JSON response. The PlanningConstitution field
-      contains the planning phase rules. Vision and Architecture provide project
-      context.
+      The measure template receives a ProjectContext string containing all
+      project documentation (vision, architecture, PRDs, specs, engineering
+      guidelines), source code, and existing issues as structured YAML. This
+      eliminates the need for Claude to read files via tool calls. The Limit
+      is always 1 because measure uses an iterative strategy (see
+      eng04-measure-scaling). The OutputPath is where Claude writes its YAML
+      response. The PlanningConstitution field contains the planning phase rules.
 
       ### StitchPromptData
 
@@ -63,10 +62,13 @@ sections:
       | IssueType | string | Task type from beads (default "task") |
       | Description | string | Task description from beads |
       | ExecutionConstitution | string | Embedded execution.yaml constitution |
+      | ProjectContext | string (YAML) | buildProjectContext — docs + source from worktree |
 
-      The stitch template receives the task details. Claude uses these to
-      understand what to implement and includes the task ID in commit messages.
-      The ExecutionConstitution field provides coding standards and practices.
+      The stitch template receives both the task details and the full project
+      context (documentation and source code from the worktree). Claude uses
+      the ProjectContext to understand existing patterns and implementations
+      without needing to read files. Source code is loaded from the worktree
+      directory so the agent sees the latest state after prior stitches.
 
   - title: Customization
     content: |

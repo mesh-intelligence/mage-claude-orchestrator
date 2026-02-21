@@ -119,6 +119,10 @@ type CobblerConfig struct {
 	// EstimatedLinesMax is the maximum estimated lines per task (default 350).
 	// Passed to the measure prompt template as LinesMax.
 	EstimatedLinesMax int `yaml:"estimated_lines_max"`
+
+	// HistoryDir is the directory for saving measure artifacts (prompt,
+	// issues YAML, stream-json log) per iteration. Default "history".
+	HistoryDir string `yaml:"history_dir"`
 }
 
 // PodmanConfig holds settings for the podman container runtime.
@@ -269,6 +273,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Cobbler.EstimatedLinesMax == 0 {
 		c.Cobbler.EstimatedLinesMax = 350
+	}
+	if c.Cobbler.HistoryDir == "" {
+		c.Cobbler.HistoryDir = "history"
 	}
 	if c.Claude.MaxTimeSec == 0 {
 		c.Claude.MaxTimeSec = 300

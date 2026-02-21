@@ -353,7 +353,7 @@ func (o *Orchestrator) doOneTask(task stitchTask, baseBranch, repoRoot string) e
 		Caller:    "stitch",
 		StartedAt: claudeStart.UTC().Format(time.RFC3339),
 		DurationS: int(time.Since(taskStart).Seconds()),
-		Tokens:    claudeTokens{Input: tokens.InputTokens, Output: tokens.OutputTokens},
+		Tokens:    claudeTokens{Input: tokens.InputTokens, Output: tokens.OutputTokens, CacheCreation: tokens.CacheCreationTokens, CacheRead: tokens.CacheReadTokens, CostUSD: tokens.CostUSD},
 		LOCBefore: locBefore,
 		LOCAfter:  locAfter,
 		Diff:      diffRecord{Files: diff.FilesChanged, Insertions: diff.Insertions, Deletions: diff.Deletions},
@@ -403,6 +403,7 @@ type StitchPromptData struct {
 	IssueType             string
 	Description           string
 	ExecutionConstitution string
+	ProjectContext        string
 }
 
 func (o *Orchestrator) buildStitchPrompt(task stitchTask) string {
@@ -415,12 +416,37 @@ func (o *Orchestrator) buildStitchPrompt(task stitchTask) string {
 	if executionConst == "" {
 		executionConst = executionConstitution
 	}
+
+	// Build project context from the worktree directory so source code
+	// reflects the latest state after prior stitches have been merged.
+	var projectCtx string
+	if task.worktreeDir != "" {
+		orig, err := os.Getwd()
+		if err != nil {
+			logf("buildStitchPrompt: getwd error: %v", err)
+		} else {
+			if err := os.Chdir(task.worktreeDir); err != nil {
+				logf("buildStitchPrompt: chdir to worktree error: %v", err)
+			} else {
+				ctx, ctxErr := buildProjectContext("", o.cfg.Project.GoSourceDirs)
+				if ctxErr != nil {
+					logf("buildStitchPrompt: buildProjectContext error: %v", ctxErr)
+				} else {
+					projectCtx = ctx
+				}
+				os.Chdir(orig) // nolint: restore original directory
+			}
+		}
+	}
+	logf("buildStitchPrompt: projectCtx=%d bytes", len(projectCtx))
+
 	data := StitchPromptData{
 		Title:                 task.title,
 		ID:                    task.id,
 		IssueType:             task.issueType,
 		Description:           task.description,
 		ExecutionConstitution: executionConst,
+		ProjectContext:        projectCtx,
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {

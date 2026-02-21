@@ -216,6 +216,18 @@ func gitListBranchesMatching(t *testing.T, dir, substr string) []string {
 	return branches
 }
 
+// gitHead returns the full SHA of HEAD in dir.
+func gitHead(t *testing.T, dir string) string {
+	t.Helper()
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("gitHead: %v", err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // countReadyIssues calls bd ready in dir and returns the number of available
 // tasks. Uses the same command the orchestrator uses (bd ready --json --type
 // task) rather than bd list --status ready, since tasks may be in states

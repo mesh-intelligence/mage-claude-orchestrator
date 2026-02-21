@@ -40,6 +40,70 @@ func TestCobbler_MeasureCreatesIssues(t *testing.T) {
 	t.Logf("cobbler:measure created %d issue(s)", n)
 }
 
+// TestCobbler_StitchExecutesTask verifies that cobbler:stitch picks a ready
+// issue created by measure and executes it: the task is closed, code is
+// committed, and the task branch is cleaned up.
+//
+//	E2E_CLAUDE=1 go test -v -count=1 -timeout 900s -run TestCobbler_StitchExecutesTask ./tests/e2e/...
+func TestCobbler_StitchExecutesTask(t *testing.T) {
+	requiresClaude(t)
+	dir := setupRepo(t)
+	setupClaude(t, dir)
+
+	writeConfigOverride(t, dir, func(cfg *orchestrator.Config) {
+		cfg.Cobbler.MaxMeasureIssues = 1
+		cfg.Cobbler.MaxStitchIssuesPerCycle = 1
+		cfg.Claude.MaxTimeSec = 600
+	})
+
+	// Full reset and start a generation branch.
+	if err := runMage(t, dir, "reset"); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if err := runMage(t, dir, "generator:start"); err != nil {
+		t.Fatalf("generator:start: %v", err)
+	}
+	genBranch := gitBranch(t, dir)
+	t.Logf("generation branch: %s", genBranch)
+
+	// Measure: create 1 issue.
+	if err := runMage(t, dir, "cobbler:measure"); err != nil {
+		t.Fatalf("cobbler:measure: %v", err)
+	}
+	nBefore := countReadyIssues(t, dir)
+	if nBefore == 0 {
+		t.Fatal("expected at least 1 ready issue after measure, got 0")
+	}
+	t.Logf("after measure: %d ready issue(s)", nBefore)
+
+	// Record git HEAD before stitch.
+	headBefore := gitHead(t, dir)
+
+	// Stitch: execute the issue.
+	if err := runMage(t, dir, "cobbler:stitch"); err != nil {
+		t.Fatalf("cobbler:stitch: %v", err)
+	}
+
+	// Verify: no ready issues remain.
+	nAfter := countReadyIssues(t, dir)
+	if nAfter != 0 {
+		t.Errorf("expected 0 ready issues after stitch, got %d", nAfter)
+	}
+
+	// Verify: git HEAD advanced (stitch merged code).
+	headAfter := gitHead(t, dir)
+	if headAfter == headBefore {
+		t.Error("expected git HEAD to advance after stitch, but it did not")
+	}
+	t.Logf("HEAD before=%s after=%s", headBefore[:8], headAfter[:8])
+
+	// Verify: no leftover task branches.
+	taskBranches := gitListBranchesMatching(t, dir, "task/")
+	if len(taskBranches) > 0 {
+		t.Errorf("expected no task branches after stitch, got %v", taskBranches)
+	}
+}
+
 // TestCobbler_BeadsResetClearsAfterMeasure verifies that beads:reset clears
 // issues created by measure.
 func TestCobbler_BeadsResetClearsAfterMeasure(t *testing.T) {

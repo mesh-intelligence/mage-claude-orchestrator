@@ -75,6 +75,100 @@ func recordInvocation(issueID string, rec InvocationRecord) {
 	}
 }
 
+// progressWriter wraps a bytes.Buffer, logging concise one-line summaries
+// of Claude stream-json events (tool calls, result) via logf(). All bytes
+// pass through to the underlying buffer unchanged.
+type progressWriter struct {
+	buf     *bytes.Buffer
+	start   time.Time
+	partial []byte
+}
+
+func newProgressWriter(dst *bytes.Buffer, start time.Time) *progressWriter {
+	return &progressWriter{buf: dst, start: start}
+}
+
+func (pw *progressWriter) Write(p []byte) (int, error) {
+	n, err := pw.buf.Write(p)
+	if err != nil {
+		return n, err
+	}
+	pw.partial = append(pw.partial, p...)
+	for {
+		idx := bytes.IndexByte(pw.partial, '\n')
+		if idx < 0 {
+			break
+		}
+		pw.logLine(pw.partial[:idx])
+		pw.partial = pw.partial[idx+1:]
+	}
+	return n, nil
+}
+
+// logLine parses a single JSON line and logs tool_use blocks and the
+// final result event.
+func (pw *progressWriter) logLine(line []byte) {
+	if len(line) == 0 {
+		return
+	}
+	var msg struct {
+		Type    string `json:"type"`
+		Message struct {
+			Content []struct {
+				Type  string          `json:"type"`
+				Name  string          `json:"name"`
+				Input json.RawMessage `json:"input"`
+			} `json:"content"`
+		} `json:"message"`
+		Usage struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
+	}
+	if json.Unmarshal(line, &msg) != nil {
+		return
+	}
+	elapsed := time.Since(pw.start).Round(time.Second)
+	switch msg.Type {
+	case "assistant":
+		for _, b := range msg.Message.Content {
+			if b.Type == "tool_use" {
+				logf("[%s] tool: %s %s", elapsed, b.Name, toolSummary(b.Input))
+			}
+		}
+	case "result":
+		logf("[%s] result: tokens(in=%d out=%d)", elapsed,
+			msg.Usage.InputTokens, msg.Usage.OutputTokens)
+	}
+}
+
+// toolSummary extracts a concise context string from tool input JSON
+// (file_path, command, pattern, etc.).
+func toolSummary(input json.RawMessage) string {
+	if len(input) == 0 {
+		return ""
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(input, &fields) != nil {
+		return ""
+	}
+	for _, key := range []string{"file_path", "path", "pattern", "command"} {
+		raw, ok := fields[key]
+		if !ok {
+			continue
+		}
+		var val string
+		if json.Unmarshal(raw, &val) != nil {
+			continue
+		}
+		if key == "command" && len(val) > 80 {
+			val = val[:80] + "..."
+		}
+		return val
+	}
+	return ""
+}
+
 // parseClaudeTokens extracts token usage from Claude's stream-json
 // output. The final JSON line has "type":"result" with a "usage" object
 // containing "input_tokens" and "output_tokens".
@@ -189,7 +283,7 @@ func (o *Orchestrator) runClaude(prompt, dir string, silence bool) (ClaudeResult
 
 	var stdoutBuf bytes.Buffer
 	if silence {
-		cmd.Stdout = &stdoutBuf
+		cmd.Stdout = newProgressWriter(&stdoutBuf, time.Now())
 	} else {
 		cmd.Stdout = io.MultiWriter(os.Stdout, &stdoutBuf)
 		cmd.Stderr = os.Stderr

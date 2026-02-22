@@ -46,8 +46,10 @@ func (o *Orchestrator) MeasurePrompt() error {
 // avoid duplicates. This avoids the super-linear thinking-time scaling observed
 // when requesting multiple issues in a single call (see eng04-measure-scaling).
 func (o *Orchestrator) RunMeasure() error {
+	setPhase("measure")
+	defer clearPhase()
 	measureStart := time.Now()
-	logf("measure: starting (iterative, %d issue(s) requested)", o.cfg.Cobbler.MaxMeasureIssues)
+	logf("starting (iterative, %d issue(s) requested)", o.cfg.Cobbler.MaxMeasureIssues)
 	o.logConfig("measure")
 
 	if err := o.checkClaude(); err != nil {
@@ -55,19 +57,19 @@ func (o *Orchestrator) RunMeasure() error {
 	}
 
 	if err := o.requireBeads(); err != nil {
-		logf("measure: beads not initialized: %v", err)
+		logf("beads not initialized: %v", err)
 		return err
 	}
 
 	branch, err := o.resolveBranch(o.cfg.Generation.Branch)
 	if err != nil {
-		logf("measure: resolveBranch failed: %v", err)
+		logf("resolveBranch failed: %v", err)
 		return err
 	}
-	logf("measure: resolved branch=%s", branch)
+	logf("resolved branch=%s", branch)
 
 	if err := ensureOnBranch(branch); err != nil {
-		logf("measure: ensureOnBranch failed: %v", err)
+		logf("ensureOnBranch failed: %v", err)
 		return fmt.Errorf("switching to branch: %w", err)
 	}
 
@@ -76,7 +78,7 @@ func (o *Orchestrator) RunMeasure() error {
 	// Clean up old measure temp files.
 	matches, _ := filepath.Glob(o.cfg.Cobbler.Dir + "measure-*.yaml")
 	if len(matches) > 0 {
-		logf("measure: cleaning %d old measure temp file(s)", len(matches))
+		logf("cleaning %d old measure temp file(s)", len(matches))
 	}
 	for _, f := range matches {
 		os.Remove(f)
@@ -87,7 +89,7 @@ func (o *Orchestrator) RunMeasure() error {
 	issueCount := countJSONArray(existingIssues)
 	commitSHA, _ := gitRevParseHEAD()
 
-	logf("measure: found %d existing issue(s), maxMeasureIssues=%d, commit=%s",
+	logf("found %d existing issue(s), maxMeasureIssues=%d, commit=%s",
 		issueCount, o.cfg.Cobbler.MaxMeasureIssues, commitSHA)
 
 	// Create a beads tracking issue for this measure invocation.
@@ -95,7 +97,7 @@ func (o *Orchestrator) RunMeasure() error {
 
 	// Snapshot LOC before Claude.
 	locBefore := o.captureLOC()
-	logf("measure: locBefore prod=%d test=%d", locBefore.Production, locBefore.Test)
+	logf("locBefore prod=%d test=%d", locBefore.Production, locBefore.Test)
 
 	// Iterative measure: call Claude once per issue with limit=1.
 	// Between calls, import the result into beads and refresh the issue list
@@ -106,7 +108,7 @@ func (o *Orchestrator) RunMeasure() error {
 	claudeStart := time.Now() // overall Claude start for tracking
 
 	for i := 0; i < totalIssues; i++ {
-		logf("measure: --- iteration %d/%d ---", i+1, totalIssues)
+		logf("--- iteration %d/%d ---", i+1, totalIssues)
 
 		// Refresh existing issues from beads before each call (except the first,
 		// where we already have them).
@@ -118,7 +120,7 @@ func (o *Orchestrator) RunMeasure() error {
 		outputFile := filepath.Join(o.cfg.Cobbler.Dir, fmt.Sprintf("measure-%s.yaml", timestamp))
 
 		prompt := o.buildMeasurePrompt(o.cfg.Cobbler.UserPrompt, existingIssues, 1, outputFile)
-		logf("measure: iteration %d prompt built, length=%d bytes", i+1, len(prompt))
+		logf("iteration %d prompt built, length=%d bytes", i+1, len(prompt))
 
 		iterStart := time.Now()
 		tokens, err := o.runClaude(prompt, "", o.cfg.Silence())
@@ -131,33 +133,43 @@ func (o *Orchestrator) RunMeasure() error {
 		totalTokens.CostUSD += tokens.CostUSD
 
 		if err != nil {
-			logf("measure: Claude failed on iteration %d after %s: %v",
+			logf("Claude failed on iteration %d after %s: %v",
 				i+1, iterDuration.Round(time.Second), err)
 			o.closeMeasureTrackingIssue(trackingID, claudeStart, measureStart,
 				totalTokens, locBefore, o.captureLOC(), len(allCreatedIDs), err)
 			return fmt.Errorf("running Claude (iteration %d/%d): %w", i+1, totalIssues, err)
 		}
-		logf("measure: iteration %d Claude completed in %s", i+1, iterDuration.Round(time.Second))
+		logf("iteration %d Claude completed in %s", i+1, iterDuration.Round(time.Second))
 
-		// Save history artifacts (prompt, log, issues) before importing.
+		// Save history artifacts (prompt, log, issues, stats) before importing.
 		historyTS := time.Now().Format("2006-01-02-15-04-05")
 		o.saveHistory(historyTS, prompt, tokens.RawOutput, outputFile)
+		o.saveHistoryStats(historyTS, "measure", HistoryStats{
+			Caller:    "measure",
+			StartedAt: iterStart.UTC().Format(time.RFC3339),
+			Duration:  iterDuration.Round(time.Second).String(),
+			DurationS: int(iterDuration.Seconds()),
+			Tokens:    historyTokens{Input: tokens.InputTokens, Output: tokens.OutputTokens, CacheCreation: tokens.CacheCreationTokens, CacheRead: tokens.CacheReadTokens},
+			CostUSD:   tokens.CostUSD,
+			LOCBefore: locBefore,
+			LOCAfter:  o.captureLOC(),
+		})
 
 		// Import the proposed issue.
 		if _, statErr := os.Stat(outputFile); statErr != nil {
-			logf("measure: iteration %d output file not found (Claude may not have written it)", i+1)
+			logf("iteration %d output file not found (Claude may not have written it)", i+1)
 			continue
 		}
 
 		fileInfo, _ := os.Stat(outputFile)
-		logf("measure: iteration %d output file size=%d bytes", i+1, fileInfo.Size())
+		logf("iteration %d output file size=%d bytes", i+1, fileInfo.Size())
 
 		createdIDs, importErr := o.importIssues(outputFile)
 		if importErr != nil {
-			logf("measure: iteration %d import failed: %v", i+1, importErr)
+			logf("iteration %d import failed: %v", i+1, importErr)
 			continue
 		}
-		logf("measure: iteration %d imported %d issue(s)", i+1, len(createdIDs))
+		logf("iteration %d imported %d issue(s)", i+1, len(createdIDs))
 
 		// Record invocation metrics on each created issue.
 		rec := InvocationRecord{
@@ -175,7 +187,7 @@ func (o *Orchestrator) RunMeasure() error {
 		allCreatedIDs = append(allCreatedIDs, createdIDs...)
 
 		if len(createdIDs) == 0 {
-			logf("measure: iteration %d created no issues, keeping %s for inspection", i+1, outputFile)
+			logf("iteration %d created no issues, keeping %s for inspection", i+1, outputFile)
 		} else {
 			os.Remove(outputFile)
 		}
@@ -186,7 +198,7 @@ func (o *Orchestrator) RunMeasure() error {
 	o.closeMeasureTrackingIssue(trackingID, claudeStart, measureStart,
 		totalTokens, locBefore, locAfter, len(allCreatedIDs), nil)
 
-	logf("measure: completed %d iteration(s), %d issue(s) created in %s",
+	logf("completed %d iteration(s), %d issue(s) created in %s",
 		totalIssues, len(allCreatedIDs), time.Since(measureStart).Round(time.Second))
 	return nil
 }
@@ -215,7 +227,7 @@ func (o *Orchestrator) createMeasureTrackingIssue(branch, commitSHA string, exis
 		return ""
 	}
 
-	logf("measure: tracking issue created: %s", created.ID)
+	logf("tracking issue created: %s", created.ID)
 
 	// Claim the issue immediately.
 	if err := bdUpdateStatus(created.ID, "in_progress"); err != nil {

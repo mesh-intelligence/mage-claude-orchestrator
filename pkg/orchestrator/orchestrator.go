@@ -43,14 +43,42 @@ func setGeneration(name string) { currentGeneration = name }
 // clearGeneration removes the generation tag from subsequent log lines.
 func clearGeneration() { currentGeneration = "" }
 
+// currentPhase holds the active workflow phase (e.g. "measure", "stitch").
+// When set, logf includes it and the elapsed time since the phase started.
+var currentPhase string
+var phaseStart time.Time
+
+// setPhase sets the active workflow phase for log tagging.
+func setPhase(name string) {
+	currentPhase = name
+	phaseStart = time.Now()
+}
+
+// clearPhase removes the phase tag from subsequent log lines.
+func clearPhase() {
+	currentPhase = ""
+	phaseStart = time.Time{}
+}
+
 // logf prints a timestamped log line to stderr. When currentGeneration
-// is set, the generation name appears right after the timestamp.
+// is set, the generation name appears right after the timestamp. When
+// currentPhase is set, the phase name and elapsed time since phase start
+// are included.
 func logf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	ts := time.Now().Format(time.RFC3339)
-	if currentGeneration != "" {
-		fmt.Fprintf(os.Stderr, "[%s] [%s] %s\n", ts, currentGeneration, msg)
+
+	var prefix string
+	if currentGeneration != "" && currentPhase != "" {
+		elapsed := time.Since(phaseStart).Round(time.Second)
+		prefix = fmt.Sprintf("[%s] [%s] [%s +%s]", ts, currentGeneration, currentPhase, elapsed)
+	} else if currentGeneration != "" {
+		prefix = fmt.Sprintf("[%s] [%s]", ts, currentGeneration)
+	} else if currentPhase != "" {
+		elapsed := time.Since(phaseStart).Round(time.Second)
+		prefix = fmt.Sprintf("[%s] [%s +%s]", ts, currentPhase, elapsed)
 	} else {
-		fmt.Fprintf(os.Stderr, "[%s] %s\n", ts, msg)
+		prefix = fmt.Sprintf("[%s]", ts)
 	}
+	fmt.Fprintf(os.Stderr, "%s %s\n", prefix, msg)
 }

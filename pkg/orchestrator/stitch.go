@@ -39,8 +39,10 @@ func (o *Orchestrator) RunStitch() (int, error) {
 
 // RunStitchN processes up to n tasks and returns the count completed.
 func (o *Orchestrator) RunStitchN(limit int) (int, error) {
+	setPhase("stitch")
+	defer clearPhase()
 	stitchStart := time.Now()
-	logf("stitch: starting (limit=%d)", limit)
+	logf("starting (limit=%d)", limit)
 	o.logConfig("stitch")
 
 	if err := o.checkClaude(); err != nil {
@@ -48,19 +50,19 @@ func (o *Orchestrator) RunStitchN(limit int) (int, error) {
 	}
 
 	if err := o.requireBeads(); err != nil {
-		logf("stitch: beads not initialized: %v", err)
+		logf("beads not initialized: %v", err)
 		return 0, err
 	}
 
 	branch, err := o.resolveBranch(o.cfg.Generation.Branch)
 	if err != nil {
-		logf("stitch: resolveBranch failed: %v", err)
+		logf("resolveBranch failed: %v", err)
 		return 0, err
 	}
-	logf("stitch: resolved branch=%s", branch)
+	logf("resolved branch=%s", branch)
 
 	if err := ensureOnBranch(branch); err != nil {
-		logf("stitch: ensureOnBranch failed: %v", err)
+		logf("ensureOnBranch failed: %v", err)
 		return 0, fmt.Errorf("switching to branch: %w", err)
 	}
 
@@ -68,49 +70,49 @@ func (o *Orchestrator) RunStitchN(limit int) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("getting working directory: %w", err)
 	}
-	logf("stitch: repoRoot=%s", repoRoot)
+	logf("repoRoot=%s", repoRoot)
 
 	worktreeBase := worktreeBasePath()
-	logf("stitch: worktreeBase=%s", worktreeBase)
+	logf("worktreeBase=%s", worktreeBase)
 
 	baseBranch, err := gitCurrentBranch()
 	if err != nil {
 		return 0, fmt.Errorf("getting current branch: %w", err)
 	}
-	logf("stitch: baseBranch=%s", baseBranch)
+	logf("baseBranch=%s", baseBranch)
 
-	logf("stitch: recovering stale tasks")
+	logf("recovering stale tasks")
 	if err := o.recoverStaleTasks(baseBranch, worktreeBase); err != nil {
-		logf("stitch: recovery failed: %v", err)
+		logf("recovery failed: %v", err)
 		return 0, fmt.Errorf("recovery: %w", err)
 	}
 
 	totalTasks := 0
 	for {
 		if limit > 0 && totalTasks >= limit {
-			logf("stitch: reached per-cycle limit (%d), pausing for measure", limit)
+			logf("reached per-cycle limit (%d), pausing for measure", limit)
 			break
 		}
 
-		logf("stitch: looking for next ready task (completed %d so far)", totalTasks)
+		logf("looking for next ready task (completed %d so far)", totalTasks)
 		task, err := pickTask(baseBranch, worktreeBase)
 		if err != nil {
-			logf("stitch: no more tasks: %v", err)
+			logf("no more tasks: %v", err)
 			break
 		}
 
 		taskStart := time.Now()
-		logf("stitch: executing task %d: id=%s title=%q", totalTasks+1, task.id, task.title)
+		logf("executing task %d: id=%s title=%q", totalTasks+1, task.id, task.title)
 		if err := o.doOneTask(task, baseBranch, repoRoot); err != nil {
-			logf("stitch: task %s failed after %s: %v", task.id, time.Since(taskStart).Round(time.Second), err)
+			logf("task %s failed after %s: %v", task.id, time.Since(taskStart).Round(time.Second), err)
 			return totalTasks, fmt.Errorf("executing task %s: %w", task.id, err)
 		}
-		logf("stitch: task %s completed in %s", task.id, time.Since(taskStart).Round(time.Second))
+		logf("task %s completed in %s", task.id, time.Since(taskStart).Round(time.Second))
 
 		totalTasks++
 	}
 
-	logf("stitch: completed %d task(s) in %s", totalTasks, time.Since(stitchStart).Round(time.Second))
+	logf("completed %d task(s) in %s", totalTasks, time.Since(stitchStart).Round(time.Second))
 	return totalTasks, nil
 }
 
@@ -361,11 +363,29 @@ func (o *Orchestrator) doOneTask(task stitchTask, baseBranch, repoRoot string) e
 	logf("doOneTask: cleaning up worktree for %s", task.id)
 	cleanupWorktree(task)
 
+	// Save stitch history (prompt, log, stats).
+	taskDuration := time.Since(taskStart)
+	historyTS := time.Now().Format("2006-01-02-15-04-05")
+	o.saveHistoryPromptAndLog(historyTS, "stitch", prompt, tokens.RawOutput)
+	o.saveHistoryStats(historyTS, "stitch", HistoryStats{
+		Caller:    "stitch",
+		TaskID:    task.id,
+		TaskTitle: task.title,
+		StartedAt: claudeStart.UTC().Format(time.RFC3339),
+		Duration:  taskDuration.Round(time.Second).String(),
+		DurationS: int(taskDuration.Seconds()),
+		Tokens:    historyTokens{Input: tokens.InputTokens, Output: tokens.OutputTokens, CacheCreation: tokens.CacheCreationTokens, CacheRead: tokens.CacheReadTokens},
+		CostUSD:   tokens.CostUSD,
+		LOCBefore: locBefore,
+		LOCAfter:  locAfter,
+		Diff:      historyDiff{Files: diff.FilesChanged, Insertions: diff.Insertions, Deletions: diff.Deletions},
+	})
+
 	// Close task with metrics.
 	rec := InvocationRecord{
 		Caller:    "stitch",
 		StartedAt: claudeStart.UTC().Format(time.RFC3339),
-		DurationS: int(time.Since(taskStart).Seconds()),
+		DurationS: int(taskDuration.Seconds()),
 		Tokens:    claudeTokens{Input: tokens.InputTokens, Output: tokens.OutputTokens, CacheCreation: tokens.CacheCreationTokens, CacheRead: tokens.CacheReadTokens, CostUSD: tokens.CostUSD},
 		LOCBefore: locBefore,
 		LOCAfter:  locAfter,

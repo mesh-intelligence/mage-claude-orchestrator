@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ClaudeResult holds token usage from a Claude invocation.
@@ -72,6 +74,91 @@ type diffRecord struct {
 	Deletions  int `json:"deletions"`
 }
 
+// HistoryStats is the YAML-serializable stats file saved alongside prompt
+// and log artifacts in the history directory.
+type HistoryStats struct {
+	Caller    string       `yaml:"caller"`
+	TaskID    string       `yaml:"task_id,omitempty"`
+	TaskTitle string       `yaml:"task_title,omitempty"`
+	StartedAt string       `yaml:"started_at"`
+	Duration  string       `yaml:"duration"`
+	DurationS int          `yaml:"duration_s"`
+	Tokens    historyTokens `yaml:"tokens"`
+	CostUSD   float64      `yaml:"cost_usd"`
+	LOCBefore LocSnapshot  `yaml:"loc_before"`
+	LOCAfter  LocSnapshot  `yaml:"loc_after"`
+	Diff      historyDiff  `yaml:"diff"`
+}
+
+type historyTokens struct {
+	Input         int `yaml:"input"`
+	Output        int `yaml:"output"`
+	CacheCreation int `yaml:"cache_creation"`
+	CacheRead     int `yaml:"cache_read"`
+}
+
+type historyDiff struct {
+	Files      int `yaml:"files"`
+	Insertions int `yaml:"insertions"`
+	Deletions  int `yaml:"deletions"`
+}
+
+// saveHistoryStats writes a stats YAML file to the history directory.
+// The file is named {ts}-{phase}-stats.yaml.
+func (o *Orchestrator) saveHistoryStats(ts, phase string, stats HistoryStats) {
+	dir := o.cfg.Cobbler.HistoryDir
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		logf("saveHistoryStats: mkdir %s: %v", dir, err)
+		return
+	}
+
+	data, err := yaml.Marshal(&stats)
+	if err != nil {
+		logf("saveHistoryStats: marshal: %v", err)
+		return
+	}
+
+	path := filepath.Join(dir, ts+"-"+phase+"-stats.yaml")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		logf("saveHistoryStats: write %s: %v", path, err)
+		return
+	}
+	logf("saveHistoryStats: saved %s", path)
+}
+
+// saveHistoryPromptAndLog writes prompt and log files to the history directory.
+// The files are named {ts}-{phase}-prompt.yaml and {ts}-{phase}-log.log.
+func (o *Orchestrator) saveHistoryPromptAndLog(ts, phase, prompt string, rawOutput []byte) {
+	dir := o.cfg.Cobbler.HistoryDir
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		logf("saveHistoryPromptAndLog: mkdir %s: %v", dir, err)
+		return
+	}
+
+	base := ts + "-" + phase
+	saved := 0
+
+	if err := os.WriteFile(filepath.Join(dir, base+"-prompt.yaml"), []byte(prompt), 0o644); err != nil {
+		logf("saveHistoryPromptAndLog: write prompt: %v", err)
+	} else {
+		saved++
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, base+"-log.log"), rawOutput, 0o644); err != nil {
+		logf("saveHistoryPromptAndLog: write log: %v", err)
+	} else {
+		saved++
+	}
+
+	logf("saveHistoryPromptAndLog: saved %d file(s) to %s/%s-*", saved, dir, base)
+}
+
 // recordInvocation serializes an InvocationRecord to JSON and adds it
 // as a beads comment on the given issue.
 func recordInvocation(issueID string, rec InvocationRecord) {
@@ -104,7 +191,7 @@ func newProgressWriter(dst *bytes.Buffer, start time.Time) *progressWriter {
 func (pw *progressWriter) Write(p []byte) (int, error) {
 	if !pw.gotFirst {
 		pw.gotFirst = true
-		logf("[%s] first output from container", time.Since(pw.start).Round(time.Second))
+		logf("claude: [%s] first output", time.Since(pw.start).Round(time.Second))
 	}
 	n, err := pw.buf.Write(p)
 	if err != nil {
@@ -171,26 +258,26 @@ func (pw *progressWriter) logLine(line []byte) {
 		}
 		// Always log the turn header with timing.
 		if snippet != "" {
-			logf("[%s +%s] turn %d: %s", total, step, pw.turn, snippet)
+			logf("claude: [%s +%s] turn %d: %s", total, step, pw.turn, snippet)
 		} else {
-			logf("[%s +%s] turn %d", total, step, pw.turn)
+			logf("claude: [%s +%s] turn %d", total, step, pw.turn)
 		}
 		// Log each tool call.
 		for _, b := range msg.Message.Content {
 			if b.Type == "tool_use" {
-				logf("[%s] turn %d: tool %s %s", total, pw.turn, b.Name, toolSummary(b.Input))
+				logf("claude: [%s] turn %d: tool %s %s", total, pw.turn, b.Name, toolSummary(b.Input))
 			}
 		}
 	case "user":
-		logf("[%s +%s] tools done, waiting for LLM", total, step)
+		logf("claude: [%s +%s] tools done, waiting for LLM", total, step)
 	case "rate_limit_event":
-		logf("[%s] rate_limit", total)
+		logf("claude: [%s] rate_limit", total)
 	case "system":
-		logf("[%s] claude ready", total)
+		logf("claude: [%s] ready", total)
 	case "result":
 		u := msg.Usage
 		totalIn := u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
-		logf("[%s] done: %d turn(s), in=%d (base=%d cache_create=%d cache_read=%d) out=%d cost=$%.4f",
+		logf("claude: [%s] done: %d turn(s), in=%d (base=%d cache_create=%d cache_read=%d) out=%d cost=$%.4f",
 			total, pw.turn, totalIn, u.InputTokens, u.CacheCreationInputTokens,
 			u.CacheReadInputTokens, u.OutputTokens, msg.TotalCostUSD)
 	}

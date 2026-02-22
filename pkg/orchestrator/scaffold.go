@@ -601,6 +601,24 @@ func (o *Orchestrator) PrepareTestRepo(module, version, orchestratorRoot string)
 		return "", fmt.Errorf("scaffold: %w", err)
 	}
 
+	// Override with a local replace so the test repo compiles against
+	// the current orchestrator source, not a published release.
+	mageDir := filepath.Join(repoDir, "magefiles")
+	logf("prepareTestRepo: overriding with local replace -> %s", orchestratorRoot)
+	replaceCmd := exec.Command(binGo, "mod", "edit",
+		"-replace", orchestratorModule+"="+orchestratorRoot)
+	replaceCmd.Dir = mageDir
+	if err := replaceCmd.Run(); err != nil {
+		os.RemoveAll(workDir)
+		return "", fmt.Errorf("go mod edit -replace: %w", err)
+	}
+	tidyCmd := exec.Command(binGo, "mod", "tidy")
+	tidyCmd.Dir = mageDir
+	if err := tidyCmd.Run(); err != nil {
+		os.RemoveAll(workDir)
+		return "", fmt.Errorf("go mod tidy (test replace): %w", err)
+	}
+
 	// Commit scaffold artifacts so the working tree is clean.
 	addCmd2 := exec.Command(binGit, "add", "-A")
 	addCmd2.Dir = repoDir

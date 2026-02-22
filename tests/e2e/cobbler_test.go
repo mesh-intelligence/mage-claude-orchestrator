@@ -281,6 +281,96 @@ func TestMeasure_TimingByLimit(t *testing.T) {
 	}
 }
 
+// TestStitch_TimingByCycle runs alternating measure/stitch cycles and logs
+// the wall-clock time for each step. Each cycle measures 1 issue then stitches
+// it, producing per-cycle timing data for both phases.
+//
+//	E2E_CLAUDE=1 go test -v -count=1 -timeout 0 -run TestStitch_TimingByCycle ./tests/e2e/...
+func TestStitch_TimingByCycle(t *testing.T) {
+	requiresClaude(t)
+	dir := setupRepo(t)
+	setupClaude(t, dir)
+
+	const cycles = 5
+
+	writeConfigOverride(t, dir, func(cfg *orchestrator.Config) {
+		cfg.Cobbler.MaxMeasureIssues = 1
+		cfg.Cobbler.MaxStitchIssuesPerCycle = 1
+		cfg.Claude.MaxTimeSec = 600
+	})
+
+	if err := runMage(t, dir, "reset"); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if err := runMage(t, dir, "generator:start"); err != nil {
+		t.Fatalf("generator:start: %v", err)
+	}
+	genBranch := gitBranch(t, dir)
+	t.Logf("generation branch: %s", genBranch)
+
+	type result struct {
+		Cycle       int
+		MeasureTime time.Duration
+		StitchTime  time.Duration
+		Issues      int
+	}
+	results := make([]result, 0, cycles)
+	totalStart := time.Now()
+
+	for i := 1; i <= cycles; i++ {
+		t.Run(fmt.Sprintf("cycle_%d", i), func(t *testing.T) {
+			// Measure
+			mStart := time.Now()
+			if err := runMage(t, dir, "cobbler:measure"); err != nil {
+				t.Fatalf("cycle %d measure: %v", i, err)
+			}
+			mElapsed := time.Since(mStart).Round(time.Second)
+
+			n := countReadyIssues(t, dir)
+			if n == 0 {
+				t.Fatalf("cycle %d: expected at least 1 ready issue after measure, got 0", i)
+			}
+			t.Logf("cycle %d measure: %d issue(s) in %s", i, n, mElapsed)
+
+			headBefore := gitHead(t, dir)
+
+			// Stitch
+			sStart := time.Now()
+			if err := runMage(t, dir, "cobbler:stitch"); err != nil {
+				t.Fatalf("cycle %d stitch: %v", i, err)
+			}
+			sElapsed := time.Since(sStart).Round(time.Second)
+
+			headAfter := gitHead(t, dir)
+			if headAfter == headBefore {
+				t.Errorf("cycle %d: HEAD did not advance after stitch", i)
+			}
+			t.Logf("cycle %d stitch: %s (HEAD %s -> %s)", i, sElapsed, headBefore[:8], headAfter[:8])
+
+			results = append(results, result{
+				Cycle:       i,
+				MeasureTime: mElapsed,
+				StitchTime:  sElapsed,
+				Issues:      n,
+			})
+		})
+	}
+
+	totalElapsed := time.Since(totalStart).Round(time.Second)
+
+	// Summary table.
+	t.Logf("\n=== Stitch Timing Summary ===")
+	t.Logf("%-6s %-12s %-12s %-8s", "Cycle", "Measure", "Stitch", "Issues")
+	var totalMeasure, totalStitch time.Duration
+	for _, r := range results {
+		t.Logf("%-6d %-12s %-12s %-8d", r.Cycle, r.MeasureTime, r.StitchTime, r.Issues)
+		totalMeasure += r.MeasureTime
+		totalStitch += r.StitchTime
+	}
+	t.Logf("%-6s %-12s %-12s", "Total", totalMeasure.Round(time.Second), totalStitch.Round(time.Second))
+	t.Logf("Wall clock: %s", totalElapsed)
+}
+
 // TestGenerator_Stitch100 runs a full generation with 100 stitch iterations.
 // Measure creates 5 issues per pass (500-1000 LOC each); stitch processes up
 // to 10 per cycle; the generator runs until 100 total tasks are stitched or

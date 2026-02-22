@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 	"text/template"
 	"time"
@@ -75,7 +76,9 @@ func (o *Orchestrator) GeneratorResume() error {
 	}
 
 	logf("resume: resetting cobbler scratch")
-	o.CobblerReset()
+	if err := o.CobblerReset(); err != nil {
+		return fmt.Errorf("resetting cobbler: %w", err)
+	}
 
 	o.cfg.Generation.Branch = branch
 
@@ -377,7 +380,7 @@ func (o *Orchestrator) generationRevision(branch string) int {
 	for n := range nameSet {
 		names = append(names, n)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 
 	for i, n := range names {
 		if n == branch {
@@ -449,7 +452,7 @@ func (o *Orchestrator) resolveBranch(explicit string) (string, error) {
 	case 1:
 		return branches[0], nil
 	default:
-		sort.Strings(branches)
+		slices.Sort(branches)
 		return "", fmt.Errorf("multiple generation branches exist (%s); set generation.branch in configuration.yaml", strings.Join(branches, ", "))
 	}
 }
@@ -527,7 +530,7 @@ func (o *Orchestrator) GeneratorList() error {
 	for n := range nameSet {
 		names = append(names, n)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 
 	for _, name := range names {
 		isActive := branchSet[name]
@@ -672,7 +675,8 @@ func (o *Orchestrator) seedFiles(version string) error {
 		ModulePath: o.cfg.Project.ModulePath,
 	}
 
-	for path, tmplStr := range o.cfg.Project.SeedFiles {
+	for _, path := range slices.Sorted(maps.Keys(o.cfg.Project.SeedFiles)) {
+		tmplStr := o.cfg.Project.SeedFiles[path]
 		dir := filepath.Dir(path)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
@@ -714,14 +718,14 @@ func (o *Orchestrator) reinitGoModule() error {
 
 // deleteGoFiles removes all .go files except those in .git/ and magefiles/.
 func (o *Orchestrator) deleteGoFiles(root string) {
-	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		if info.IsDir() && (path == ".git" || path == o.cfg.Project.MagefilesDir) {
+		if d.IsDir() && (path == ".git" || path == o.cfg.Project.MagefilesDir) {
 			return filepath.SkipDir
 		}
-		if !info.IsDir() && strings.HasSuffix(path, ".go") {
+		if !d.IsDir() && strings.HasSuffix(path, ".go") {
 			os.Remove(path)
 		}
 		return nil
@@ -734,11 +738,11 @@ func removeEmptyDirs(root string) {
 		return
 	}
 	var dirs []string
-	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		if info.IsDir() {
+		if d.IsDir() {
 			dirs = append(dirs, path)
 		}
 		return nil

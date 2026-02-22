@@ -163,60 +163,54 @@ func (o *Orchestrator) Analyze() error {
 	result.SchemaErrors = validateDocSchemas()
 	logf("analyze: schema validation found %d error(s)", len(result.SchemaErrors))
 
-	// Print report
+	return result.printReport(len(prdIDs), len(ucIDs), len(testSuiteIDs))
+}
+
+// printSection prints a labeled list if items is non-empty, returning true.
+func printSection(label string, items []string) bool {
+	if len(items) == 0 {
+		return false
+	}
+	fmt.Printf("\n⚠️  %s:\n", label)
+	for _, item := range items {
+		fmt.Printf("  - %s\n", item)
+	}
+	return true
+}
+
+// printReport formats the analysis results to stdout. Returns nil when
+// all checks pass, or an error summarising that issues were found.
+func (r AnalyzeResult) printReport(prdCount, ucCount, tsCount int) error {
 	hasIssues := false
-	if len(result.OrphanedPRDs) > 0 {
-		hasIssues = true
-		fmt.Printf("\n⚠️  Orphaned PRDs (no use case references them):\n")
-		for _, prd := range result.OrphanedPRDs {
-			fmt.Printf("  - %s\n", prd)
-		}
-	}
-	if len(result.ReleasesWithoutTestSuites) > 0 {
-		hasIssues = true
-		fmt.Printf("\n⚠️  Releases without test suites (no docs/specs/test-suites/test-<release>.yaml):\n")
-		for _, rel := range result.ReleasesWithoutTestSuites {
-			fmt.Printf("  - %s\n", rel)
-		}
-	}
-	if len(result.OrphanedTestSuites) > 0 {
-		hasIssues = true
-		fmt.Printf("\n⚠️  Orphaned test suites (traces don't reference any known use case):\n")
-		for _, ts := range result.OrphanedTestSuites {
-			fmt.Printf("  - %s\n", ts)
-		}
-	}
-	if len(result.BrokenTouchpoints) > 0 {
-		hasIssues = true
-		fmt.Printf("\n⚠️  Broken touchpoints (use case references non-existent PRD):\n")
-		for _, tp := range result.BrokenTouchpoints {
-			fmt.Printf("  - %s\n", tp)
-		}
-	}
-	if len(result.UseCasesNotInRoadmap) > 0 {
-		hasIssues = true
-		fmt.Printf("\n⚠️  Use cases not in roadmap:\n")
-		for _, uc := range result.UseCasesNotInRoadmap {
-			fmt.Printf("  - %s\n", uc)
-		}
-	}
-	if len(result.SchemaErrors) > 0 {
-		hasIssues = true
-		fmt.Printf("\n⚠️  YAML schema errors (fields not matching typed structs — data will be lost in measure prompt):\n")
-		for _, se := range result.SchemaErrors {
-			fmt.Printf("  - %s\n", se)
-		}
-	}
+	hasIssues = printSection("Orphaned PRDs (no use case references them)", r.OrphanedPRDs) || hasIssues
+	hasIssues = printSection("Releases without test suites (no docs/specs/test-suites/test-<release>.yaml)", r.ReleasesWithoutTestSuites) || hasIssues
+	hasIssues = printSection("Orphaned test suites (traces don't reference any known use case)", r.OrphanedTestSuites) || hasIssues
+	hasIssues = printSection("Broken touchpoints (use case references non-existent PRD)", r.BrokenTouchpoints) || hasIssues
+	hasIssues = printSection("Use cases not in roadmap", r.UseCasesNotInRoadmap) || hasIssues
+	hasIssues = printSection("YAML schema errors (fields not matching typed structs — data will be lost in measure prompt)", r.SchemaErrors) || hasIssues
 
 	if !hasIssues {
 		fmt.Printf("\n✅ All consistency checks passed\n")
-		fmt.Printf("   - %d PRDs\n", len(prdIDs))
-		fmt.Printf("   - %d use cases\n", len(ucIDs))
-		fmt.Printf("   - %d test suites\n", len(testSuiteIDs))
+		fmt.Printf("   - %d PRDs\n", prdCount)
+		fmt.Printf("   - %d use cases\n", ucCount)
+		fmt.Printf("   - %d test suites\n", tsCount)
 		return nil
 	}
-
 	return fmt.Errorf("found consistency issues (see above)")
+}
+
+// analyzeUseCase holds the fields extracted from a use case file
+// that are needed for cross-artifact consistency checks.
+type analyzeUseCase struct {
+	ID          string
+	Touchpoints []string
+}
+
+// analyzeTestSuite holds the fields extracted from a test suite file
+// that are needed for cross-artifact consistency checks.
+type analyzeTestSuite struct {
+	ID     string   `yaml:"id"`
+	Traces []string `yaml:"traces"`
 }
 
 // extractID extracts the ID from a file path like "docs/specs/product-requirements/prd001-feature.yaml" -> "prd001-feature"
@@ -227,10 +221,7 @@ func extractID(path string) string {
 }
 
 // loadUseCase loads a use case YAML file and extracts key fields.
-func loadUseCase(path string) (*struct {
-	ID          string
-	Touchpoints []string
-}, error) {
+func loadUseCase(path string) (*analyzeUseCase, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -244,7 +235,7 @@ func loadUseCase(path string) (*struct {
 		return nil, err
 	}
 
-	// Convert touchpoints from list of maps to list of strings
+	// Convert touchpoints from list of maps to list of strings.
 	// Format: [{T1: "description"}] -> ["T1: description"]
 	var touchpointStrings []string
 	for _, tp := range raw.Touchpoints {
@@ -253,28 +244,19 @@ func loadUseCase(path string) (*struct {
 		}
 	}
 
-	return &struct {
-		ID          string
-		Touchpoints []string
-	}{
+	return &analyzeUseCase{
 		ID:          raw.ID,
 		Touchpoints: touchpointStrings,
 	}, nil
 }
 
 // loadTestSuite loads a test suite YAML file and extracts key fields.
-func loadTestSuite(path string) (*struct {
-	ID     string   `yaml:"id"`
-	Traces []string `yaml:"traces"`
-}, error) {
+func loadTestSuite(path string) (*analyzeTestSuite, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var ts struct {
-		ID     string   `yaml:"id"`
-		Traces []string `yaml:"traces"`
-	}
+	var ts analyzeTestSuite
 	if err := yaml.Unmarshal(data, &ts); err != nil {
 		return nil, err
 	}

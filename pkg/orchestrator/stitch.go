@@ -312,7 +312,10 @@ func (o *Orchestrator) doOneTask(task stitchTask, baseBranch, repoRoot string) e
 	logf("doOneTask: locBefore prod=%d test=%d", locBefore.Production, locBefore.Test)
 
 	// Build and run prompt.
-	prompt := o.buildStitchPrompt(task)
+	prompt, promptErr := o.buildStitchPrompt(task)
+	if promptErr != nil {
+		return promptErr
+	}
 	logf("doOneTask: prompt built, length=%d bytes", len(prompt))
 
 	logf("doOneTask: invoking Claude for task %s", task.id)
@@ -320,11 +323,7 @@ func (o *Orchestrator) doOneTask(task stitchTask, baseBranch, repoRoot string) e
 	tokens, err := o.runClaude(prompt, task.worktreeDir, o.cfg.Silence())
 	if err != nil {
 		logf("doOneTask: Claude failed for %s after %s: %v", task.id, time.Since(claudeStart).Round(time.Second), err)
-		logf("doOneTask: resetting task %s to ready", task.id)
-		bdUpdateStatus(task.id, "ready")
-		cleanupWorktree(task)
-		gitForceDeleteBranch(task.branchName)
-		o.beadsCommit(fmt.Sprintf("Reset %s after Claude failure", task.id))
+		o.resetTask(task, "Claude failure")
 		return nil
 	}
 	logf("doOneTask: Claude completed for %s in %s", task.id, time.Since(claudeStart).Round(time.Second))
@@ -333,11 +332,7 @@ func (o *Orchestrator) doOneTask(task stitchTask, baseBranch, repoRoot string) e
 	// the orchestrator manages all git operations externally.
 	if err := commitWorktreeChanges(task); err != nil {
 		logf("doOneTask: worktree commit failed for %s: %v", task.id, err)
-		logf("doOneTask: resetting task %s to ready", task.id)
-		bdUpdateStatus(task.id, "ready")
-		cleanupWorktree(task)
-		gitForceDeleteBranch(task.branchName)
-		o.beadsCommit(fmt.Sprintf("Reset %s after worktree commit failure", task.id))
+		o.resetTask(task, "worktree commit failure")
 		return nil
 	}
 
@@ -349,11 +344,7 @@ func (o *Orchestrator) doOneTask(task stitchTask, baseBranch, repoRoot string) e
 	mergeStart := time.Now()
 	if err := mergeBranch(task.branchName, baseBranch, repoRoot); err != nil {
 		logf("doOneTask: merge failed for %s after %s: %v", task.id, time.Since(mergeStart).Round(time.Second), err)
-		logf("doOneTask: resetting task %s to ready", task.id)
-		bdUpdateStatus(task.id, "ready")
-		cleanupWorktree(task)
-		gitForceDeleteBranch(task.branchName)
-		o.beadsCommit(fmt.Sprintf("Reset %s after merge failure", task.id))
+		o.resetTask(task, "merge failure")
 		return nil
 	}
 	logf("doOneTask: merge completed in %s", time.Since(mergeStart).Round(time.Second))
@@ -434,10 +425,10 @@ func createWorktree(task stitchTask) error {
 	return nil
 }
 
-func (o *Orchestrator) buildStitchPrompt(task stitchTask) string {
+func (o *Orchestrator) buildStitchPrompt(task stitchTask) (string, error) {
 	def, err := parsePromptDef(orDefault(o.cfg.Cobbler.StitchPrompt, defaultStitchPrompt))
 	if err != nil {
-		panic(fmt.Sprintf("stitch prompt YAML: %v", err))
+		return "", fmt.Errorf("stitch prompt YAML: %w", err)
 	}
 
 	executionConst := orDefault(o.cfg.Cobbler.ExecutionConstitution, executionConstitution)
@@ -475,7 +466,7 @@ func (o *Orchestrator) buildStitchPrompt(task stitchTask) string {
 		"execution_constitution": executionConst,
 		"go_style_constitution":  goStyleConst,
 	}
-	return renderPrompt(def, data)
+	return renderPrompt(def, data), nil
 }
 
 func mergeBranch(branchName, baseBranch, repoRoot string) error {
@@ -532,6 +523,17 @@ func commitWorktreeChanges(task stitchTask) error {
 
 	logf("commitWorktreeChanges: committed in worktree for %s", task.id)
 	return nil
+}
+
+// resetTask resets a failed task to ready status, cleans up its worktree
+// and branch, and commits the beads state change. The reason string is
+// included in the commit message for traceability.
+func (o *Orchestrator) resetTask(task stitchTask, reason string) {
+	logf("resetTask: resetting %s to ready (%s)", task.id, reason)
+	bdUpdateStatus(task.id, "ready")
+	cleanupWorktree(task)
+	gitForceDeleteBranch(task.branchName)
+	o.beadsCommit(fmt.Sprintf("Reset %s after %s", task.id, reason))
 }
 
 func cleanupWorktree(task stitchTask) {

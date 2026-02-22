@@ -9,9 +9,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -57,10 +59,10 @@ func (o *Orchestrator) Scaffold(targetDir, orchestratorRoot string) error {
 		"execution.yaml": executionConstitution,
 		"go-style.yaml":  goStyleConstitution,
 	}
-	for name, content := range constitutionFiles {
+	for _, name := range slices.Sorted(maps.Keys(constitutionFiles)) {
 		p := filepath.Join(constitutionsDir, name)
 		logf("scaffold: writing constitution to %s", p)
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(p, []byte(constitutionFiles[name]), 0o644); err != nil {
 			return fmt.Errorf("writing %s: %w", name, err)
 		}
 	}
@@ -75,10 +77,10 @@ func (o *Orchestrator) Scaffold(targetDir, orchestratorRoot string) error {
 		"measure.yaml": defaultMeasurePrompt,
 		"stitch.yaml":  defaultStitchPrompt,
 	}
-	for name, content := range promptFiles {
+	for _, name := range slices.Sorted(maps.Keys(promptFiles)) {
 		p := filepath.Join(promptsDir, name)
 		logf("scaffold: writing prompt to %s", p)
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(p, []byte(promptFiles[name]), 0o644); err != nil {
 			return fmt.Errorf("writing %s: %w", name, err)
 		}
 	}

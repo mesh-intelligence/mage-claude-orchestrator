@@ -33,7 +33,10 @@ func (o *Orchestrator) Measure() error {
 // Shows the prompt for a single iteration (limit=1), which is what each
 // iterative call uses.
 func (o *Orchestrator) MeasurePrompt() error {
-	prompt := o.buildMeasurePrompt("", "", 1, "measure-out.yaml")
+	prompt, err := o.buildMeasurePrompt("", "", 1, "measure-out.yaml")
+	if err != nil {
+		return err
+	}
 	fmt.Print(prompt)
 	return nil
 }
@@ -122,7 +125,10 @@ func (o *Orchestrator) RunMeasure() error {
 		timestamp := time.Now().Format("20060102-150405")
 		outputFile := filepath.Join(o.cfg.Cobbler.Dir, fmt.Sprintf("measure-%s.yaml", timestamp))
 
-		prompt := o.buildMeasurePrompt(o.cfg.Cobbler.UserPrompt, existingIssues, 1, outputFile)
+		prompt, promptErr := o.buildMeasurePrompt(o.cfg.Cobbler.UserPrompt, existingIssues, 1, outputFile)
+		if promptErr != nil {
+			return promptErr
+		}
 		logf("iteration %d prompt built, length=%d bytes", i+1, len(prompt))
 
 		iterStart := time.Now()
@@ -159,12 +165,11 @@ func (o *Orchestrator) RunMeasure() error {
 		})
 
 		// Import the proposed issue.
-		if _, statErr := os.Stat(outputFile); statErr != nil {
+		fileInfo, statErr := os.Stat(outputFile)
+		if statErr != nil {
 			logf("iteration %d output file not found (Claude may not have written it)", i+1)
 			continue
 		}
-
-		fileInfo, _ := os.Stat(outputFile)
 		logf("iteration %d output file size=%d bytes", i+1, fileInfo.Size())
 
 		createdIDs, importErr := o.importIssues(outputFile)
@@ -339,10 +344,10 @@ func countJSONArray(jsonStr string) int {
 	return len(arr)
 }
 
-func (o *Orchestrator) buildMeasurePrompt(userInput, existingIssues string, limit int, outputPath string) string {
+func (o *Orchestrator) buildMeasurePrompt(userInput, existingIssues string, limit int, outputPath string) (string, error) {
 	def, err := parsePromptDef(orDefault(o.cfg.Cobbler.MeasurePrompt, defaultMeasurePrompt))
 	if err != nil {
-		panic(fmt.Sprintf("measure prompt YAML: %v", err))
+		return "", fmt.Errorf("measure prompt YAML: %w", err)
 	}
 
 	planningConst := orDefault(o.cfg.Cobbler.PlanningConstitution, planningConstitution)
@@ -365,7 +370,7 @@ func (o *Orchestrator) buildMeasurePrompt(userInput, existingIssues string, limi
 
 	logf("buildMeasurePrompt: projectCtx=%d bytes limit=%d userInput=%v",
 		len(projectCtx), limit, userInput != "")
-	return renderPrompt(def, data)
+	return renderPrompt(def, data), nil
 }
 
 type proposedIssue struct {
@@ -454,39 +459,18 @@ func (o *Orchestrator) importIssues(yamlFile string) ([]string, error) {
 // to the configured history directory. Each iteration produces three files named
 // YYYY-MM-DD-HH-MM-SS-measure-{prompt,issues,log}.{yaml,log}.
 func (o *Orchestrator) saveHistory(ts, prompt string, rawOutput []byte, issuesFile string) {
+	o.saveHistoryPromptAndLog(ts, "measure", prompt, rawOutput)
+
 	dir := o.cfg.Cobbler.HistoryDir
 	if dir == "" {
 		return
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		logf("saveHistory: mkdir %s: %v", dir, err)
-		return
-	}
-
 	base := ts + "-measure"
-	saved := 0
-
-	if err := os.WriteFile(filepath.Join(dir, base+"-prompt.yaml"), []byte(prompt), 0o644); err != nil {
-		logf("saveHistory: write prompt: %v", err)
-	} else {
-		saved++
-	}
-
-	if err := os.WriteFile(filepath.Join(dir, base+"-log.log"), rawOutput, 0o644); err != nil {
-		logf("saveHistory: write log: %v", err)
-	} else {
-		saved++
-	}
-
 	if data, err := os.ReadFile(issuesFile); err == nil {
 		if err := os.WriteFile(filepath.Join(dir, base+"-issues.yaml"), data, 0o644); err != nil {
 			logf("saveHistory: write issues: %v", err)
-		} else {
-			saved++
 		}
 	}
-
-	logf("saveHistory: saved %d file(s) to %s/%s-*", saved, dir, base)
 }
 
 // appendMeasureLog merges newIssues into the persistent measure.yaml list.

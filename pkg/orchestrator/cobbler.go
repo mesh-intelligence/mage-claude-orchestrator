@@ -535,7 +535,9 @@ func (o *Orchestrator) hasOpenIssues() bool {
 // CobblerReset removes the cobbler scratch directory.
 func (o *Orchestrator) CobblerReset() error {
 	logf("cobblerReset: removing %s", o.cfg.Cobbler.Dir)
-	os.RemoveAll(o.cfg.Cobbler.Dir)
+	if err := os.RemoveAll(o.cfg.Cobbler.Dir); err != nil {
+		return fmt.Errorf("removing %s: %w", o.cfg.Cobbler.Dir, err)
+	}
 	logf("cobblerReset: done")
 	return nil
 }

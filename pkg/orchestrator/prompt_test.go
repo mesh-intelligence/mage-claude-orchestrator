@@ -191,7 +191,10 @@ func TestParsePromptDef_NotSequence(t *testing.T) {
 
 func TestMeasurePromptIncludesPlanningConstitution(t *testing.T) {
 	o := New(Config{})
-	prompt := o.buildMeasurePrompt("", "[]", 5, "/tmp/out.yaml")
+	prompt, err := o.buildMeasurePrompt("", "[]", 5, "/tmp/out.yaml")
+	if err != nil {
+		t.Fatalf("buildMeasurePrompt: %v", err)
+	}
 
 	if !strings.Contains(prompt, "## Planning Constitution") {
 		t.Error("measure prompt missing '## Planning Constitution' section")
@@ -207,7 +210,10 @@ func TestMeasurePromptIncludesPlanningConstitution(t *testing.T) {
 
 func TestMeasurePromptIncludesProjectContext(t *testing.T) {
 	o := New(Config{})
-	prompt := o.buildMeasurePrompt("", "[]", 5, "/tmp/out.yaml")
+	prompt, err := o.buildMeasurePrompt("", "[]", 5, "/tmp/out.yaml")
+	if err != nil {
+		t.Fatalf("buildMeasurePrompt: %v", err)
+	}
 
 	if !strings.Contains(prompt, "# PROJECT CONTEXT") {
 		t.Error("measure prompt missing '# PROJECT CONTEXT' section")
@@ -230,7 +236,10 @@ func TestStitchPromptIncludesExecutionConstitution(t *testing.T) {
 		worktreeDir: "/tmp",
 	}
 
-	prompt := o.buildStitchPrompt(task)
+	prompt, err := o.buildStitchPrompt(task)
+	if err != nil {
+		t.Fatalf("buildStitchPrompt: %v", err)
+	}
 
 	if !strings.Contains(prompt, "## Execution Constitution") {
 		t.Error("stitch prompt missing '## Execution Constitution' section")
@@ -254,7 +263,10 @@ func TestStitchPromptIncludesTaskContext(t *testing.T) {
 		worktreeDir: "/tmp",
 	}
 
-	prompt := o.buildStitchPrompt(task)
+	prompt, err := o.buildStitchPrompt(task)
+	if err != nil {
+		t.Fatalf("buildStitchPrompt: %v", err)
+	}
 
 	if !strings.Contains(prompt, "task-123") {
 		t.Error("stitch prompt missing task ID")

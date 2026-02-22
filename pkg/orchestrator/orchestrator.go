@@ -22,6 +22,9 @@ func New(cfg Config) *Orchestrator {
 	return &Orchestrator{cfg: cfg}
 }
 
+// Config returns a copy of the Orchestrator's configuration.
+func (o *Orchestrator) Config() Config { return o.cfg }
+
 // NewFromFile reads configuration from a YAML file at the given path,
 // applies defaults, and returns a configured Orchestrator.
 func NewFromFile(path string) (*Orchestrator, error) {

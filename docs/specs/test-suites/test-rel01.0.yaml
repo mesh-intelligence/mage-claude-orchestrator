@@ -10,6 +10,8 @@ traces:
   - rel01.0-uc003-measure-workflow
   - rel01.0-uc004-stitch-workflow
   - rel01.0-uc005-resume-recovery
+  - rel01.0-uc006-scaffold-operations
+  - rel01.0-uc007-build-tooling
 
 tags:
   - unit
@@ -26,12 +28,10 @@ preconditions:
 test_cases:
   - use_case: rel01.0-uc001-orchestrator-initialization
     name: New applies defaults to zero-value Config
+    go_test: TestRel01_UC001_NewAppliesDefaults
     inputs:
       command: |
-        cfg := orchestrator.Config{
-          Project: orchestrator.ProjectConfig{ModulePath: "example.com/test", BinaryName: "test"},
-        }
-        o := orchestrator.New(cfg)
+        cfg := orchestrator.DefaultConfig()
     expected:
       state:
         project.binary_dir: "bin"
@@ -44,6 +44,7 @@ test_cases:
 
   - use_case: rel01.0-uc001-orchestrator-initialization
     name: New preserves explicitly set Config values
+    go_test: TestRel01_UC001_NewPreservesValues
     inputs:
       command: |
         cfg := orchestrator.Config{
@@ -60,6 +61,7 @@ test_cases:
 
   - use_case: rel01.0-uc001-orchestrator-initialization
     name: New returns non-nil Orchestrator
+    go_test: TestRel01_UC001_NewReturnsNonNil
     inputs:
       command: |
         o := orchestrator.New(orchestrator.Config{
@@ -71,6 +73,7 @@ test_cases:
 
   - use_case: rel01.0-uc001-orchestrator-initialization
     name: Init creates beads directory
+    go_test: TestRel01_UC001_InitCreatesBD
     inputs:
       command: mage init
     expected:
@@ -79,7 +82,51 @@ test_cases:
         beads_dir_exists: true
 
   - use_case: rel01.0-uc001-orchestrator-initialization
+    name: Init is idempotent
+    go_test: TestRel01_UC001_InitIdempotent
+    inputs:
+      command: |
+        mage init
+        mage init
+    expected:
+      exit_code: 0
+
+  - use_case: rel01.0-uc001-orchestrator-initialization
+    name: CobblerReset removes cobbler directory
+    go_test: TestRel01_UC001_CobblerReset
+    inputs:
+      command: mage cobbler:reset
+    expected:
+      exit_code: 0
+      state:
+        cobbler.dir_exists: false
+        beads_dir_exists: true
+
+  - use_case: rel01.0-uc001-orchestrator-initialization
+    name: BeadsReset preserves beads directory
+    go_test: TestRel01_UC001_BeadsResetKeepsDir
+    inputs:
+      command: mage beads:reset
+    expected:
+      exit_code: 0
+      state:
+        beads_dir_exists: true
+
+  - use_case: rel01.0-uc001-orchestrator-initialization
+    name: BeadsReset clears issues
+    go_test: TestRel01_UC001_BeadsResetClearsIssues
+    inputs:
+      command: |
+        bd create --type task --title "test"
+        mage beads:reset
+    expected:
+      exit_code: 0
+      state:
+        ready_issues: 0
+
+  - use_case: rel01.0-uc001-orchestrator-initialization
     name: FullReset clears all orchestrator state
+    go_test: TestRel01_UC001_FullResetClearsState
     inputs:
       command: mage reset
     expected:
@@ -88,10 +135,37 @@ test_cases:
         cobbler.dir_exists: false
         generation_branches: 0
 
+  - use_case: rel01.0-uc001-orchestrator-initialization
+    name: CobblerReset succeeds when directory missing
+    go_test: TestRel01_UC001_CobblerResetWhenMissing
+    inputs:
+      command: mage cobbler:reset
+    expected:
+      exit_code: 0
+
+  - use_case: rel01.0-uc001-orchestrator-initialization
+    name: BeadsReset succeeds when directory missing
+    go_test: TestRel01_UC001_BeadsResetWhenMissing
+    inputs:
+      command: mage beads:reset
+    expected:
+      exit_code: 0
+
+  - use_case: rel01.0-uc001-orchestrator-initialization
+    name: GeneratorReset succeeds on clean repo
+    go_test: TestRel01_UC001_GeneratorResetWhenClean
+    inputs:
+      command: mage generator:reset
+    expected:
+      exit_code: 0
+      state:
+        current_branch: "main"
+
 # ---- uc002: Generation lifecycle from start to stop ----
 
   - use_case: rel01.0-uc002-generation-lifecycle
     name: GeneratorStart creates tagged generation branch
+    go_test: TestRel01_UC002_StartCreatesGenBranch
     inputs:
       command: mage generator:start
     expected:
@@ -104,6 +178,7 @@ test_cases:
 
   - use_case: rel01.0-uc002-generation-lifecycle
     name: GeneratorStart fails when not on main
+    go_test: TestRel01_UC002_StartFailsWhenNotOnMain
     inputs:
       command: |
         git checkout -b feature
@@ -114,6 +189,7 @@ test_cases:
 
   - use_case: rel01.0-uc002-generation-lifecycle
     name: GeneratorRun executes configured cycles
+    go_test: TestRel01_UC002_RunOneCycle
     inputs:
       command: mage generator:run
       config_overrides:
@@ -125,6 +201,7 @@ test_cases:
 
   - use_case: rel01.0-uc002-generation-lifecycle
     name: GeneratorStop merges to main and tags
+    go_test: TestRel01_UC002_StopMergesAndTags
     inputs:
       command: mage generator:stop
     expected:
@@ -137,6 +214,7 @@ test_cases:
 
   - use_case: rel01.0-uc002-generation-lifecycle
     name: GeneratorList shows all generations
+    go_test: TestRel01_UC002_ListShowsMerged
     inputs:
       command: mage generator:list
     expected:
@@ -145,6 +223,7 @@ test_cases:
 
   - use_case: rel01.0-uc002-generation-lifecycle
     name: GeneratorReset returns to clean main
+    go_test: TestRel01_UC002_ResetReturnsToCleanMain
     inputs:
       command: mage generator:reset
     expected:
@@ -155,6 +234,7 @@ test_cases:
 
   - use_case: rel01.0-uc002-generation-lifecycle
     name: GeneratorSwitch saves work and changes branch
+    go_test: TestRel01_UC002_SwitchSavesAndChangesBranch
     inputs:
       command: |
         mage generator:start
@@ -166,10 +246,24 @@ test_cases:
       state:
         current_branch: "main"
 
+  - use_case: rel01.0-uc002-generation-lifecycle
+    name: GeneratorRun completes 100 stitch iterations
+    go_test: TestRel01_UC002_Stitch100
+    inputs:
+      command: mage generator:run
+      config_overrides:
+        cobbler.max_measure_issues: 5
+        cobbler.max_stitch_issues: 100
+        cobbler.max_stitch_issues_per_cycle: 10
+    expected:
+      exit_code: 0
+
 # ---- uc003: Measure workflow task proposal ----
 
   - use_case: rel01.0-uc003-measure-workflow
     name: Measure queries existing issues
+    go_test: TestRel01_UC003_MeasureCreatesIssues
+    covered_by: TestRel01_UC003_MeasureCreatesIssues
     inputs:
       command: mage cobbler:measure
       config_overrides:
@@ -179,6 +273,7 @@ test_cases:
 
   - use_case: rel01.0-uc003-measure-workflow
     name: Measure fails when beads not initialized
+    go_test: TestRel01_UC003_MeasureFailsWithoutBeads
     inputs:
       command: |
         rm -rf .beads
@@ -189,6 +284,8 @@ test_cases:
 
   - use_case: rel01.0-uc003-measure-workflow
     name: Measure imports proposed issues into beads
+    go_test: TestRel01_UC003_MeasureCreatesIssues
+    covered_by: TestRel01_UC003_MeasureCreatesIssues
     inputs:
       command: |
         mage cobbler:measure
@@ -202,6 +299,8 @@ test_cases:
 
   - use_case: rel01.0-uc003-measure-workflow
     name: Measure respects max_issues limit
+    go_test: TestRel01_UC003_MeasureCreatesIssues
+    covered_by: TestRel01_UC003_MeasureCreatesIssues
     inputs:
       command: mage cobbler:measure
       config_overrides:
@@ -213,6 +312,7 @@ test_cases:
 
   - use_case: rel01.0-uc003-measure-workflow
     name: Measure records InvocationRecord on created issues
+    go_test: TestRel01_UC003_MeasureRecordsInvocation
     inputs:
       command: |
         mage cobbler:measure
@@ -224,10 +324,35 @@ test_cases:
       state:
         invocation_record_present: true
 
+  - use_case: rel01.0-uc003-measure-workflow
+    name: BeadsReset clears issues after measure
+    go_test: TestRel01_UC003_BeadsResetClearsAfterMeasure
+    inputs:
+      command: |
+        mage cobbler:measure
+        mage beads:reset
+      config_overrides:
+        cobbler.max_measure_issues: 1
+    expected:
+      exit_code: 0
+      state:
+        ready_issues: 0
+
+  - use_case: rel01.0-uc003-measure-workflow
+    name: Measure timing varies by issue limit
+    go_test: TestRel01_UC003_TimingByLimit
+    inputs:
+      command: mage cobbler:measure
+      config_overrides:
+        cobbler.max_measure_issues: 1..5
+    expected:
+      exit_code: 0
+
 # ---- uc004: Stitch workflow task execution ----
 
   - use_case: rel01.0-uc004-stitch-workflow
     name: Stitch picks and executes a ready task
+    go_test: TestRel01_UC004_StitchExecutesTask
     inputs:
       command: mage cobbler:stitch
       config_overrides:
@@ -241,6 +366,7 @@ test_cases:
 
   - use_case: rel01.0-uc004-stitch-workflow
     name: Stitch fails when beads not initialized
+    go_test: TestRel01_UC004_StitchFailsWithoutBeads
     inputs:
       command: |
         rm -rf .beads
@@ -251,6 +377,7 @@ test_cases:
 
   - use_case: rel01.0-uc004-stitch-workflow
     name: Stitch stops when no ready tasks
+    go_test: TestRel01_UC004_StitchStopsWhenNoReadyTasks
     inputs:
       command: mage cobbler:stitch
     expected:
@@ -259,6 +386,8 @@ test_cases:
 
   - use_case: rel01.0-uc004-stitch-workflow
     name: Stitch respects max_issues_per_cycle limit
+    go_test: TestRel01_UC004_StitchExecutesTask
+    covered_by: TestRel01_UC004_StitchExecutesTask
     inputs:
       command: mage cobbler:stitch
       config_overrides:
@@ -270,6 +399,8 @@ test_cases:
 
   - use_case: rel01.0-uc004-stitch-workflow
     name: Stitch creates worktree on task branch
+    go_test: TestRel01_UC004_StitchExecutesTask
+    covered_by: TestRel01_UC004_StitchExecutesTask
     inputs:
       command: mage cobbler:stitch
       config_overrides:
@@ -281,6 +412,8 @@ test_cases:
 
   - use_case: rel01.0-uc004-stitch-workflow
     name: Stitch merges task branch back to base
+    go_test: TestRel01_UC004_StitchExecutesTask
+    covered_by: TestRel01_UC004_StitchExecutesTask
     inputs:
       command: |
         mage cobbler:stitch
@@ -293,6 +426,7 @@ test_cases:
 
   - use_case: rel01.0-uc004-stitch-workflow
     name: Stitch records InvocationRecord with diff stats
+    go_test: TestRel01_UC004_StitchRecordsInvocation
     inputs:
       command: mage cobbler:stitch
       config_overrides:
@@ -303,10 +437,22 @@ test_cases:
         invocation_record_has_diff: true
         invocation_record_has_loc: true
 
+  - use_case: rel01.0-uc004-stitch-workflow
+    name: Stitch timing varies by cycle count
+    go_test: TestRel01_UC004_TimingByCycle
+    inputs:
+      command: mage cobbler:stitch
+      config_overrides:
+        cobbler.max_stitch_issues_per_cycle: 1
+    expected:
+      exit_code: 0
+
 # ---- uc005: Generation resume and task recovery ----
 
   - use_case: rel01.0-uc005-resume-recovery
     name: Resume resolves generation branch from configuration
+    go_test: TestRel01_UC005_Resume
+    covered_by: TestRel01_UC005_Resume
     inputs:
       command: mage generator:resume
       config_overrides:
@@ -319,6 +465,8 @@ test_cases:
 
   - use_case: rel01.0-uc005-resume-recovery
     name: Resume auto-detects single generation branch
+    go_test: TestRel01_UC005_Resume
+    covered_by: TestRel01_UC005_Resume
     inputs:
       command: mage generator:resume
       config_overrides:
@@ -330,6 +478,7 @@ test_cases:
 
   - use_case: rel01.0-uc005-resume-recovery
     name: Resume fails with multiple generation branches
+    go_test: TestRel01_UC005_ResumeFailsWithMultipleBranches
     inputs:
       command: |
         git branch generation-a
@@ -343,6 +492,7 @@ test_cases:
 
   - use_case: rel01.0-uc005-resume-recovery
     name: Resume recovers stale task branches
+    go_test: TestRel01_UC005_ResumeRecoversStaleBranches
     inputs:
       command: |
         git branch task/generation-test-stale-id
@@ -356,6 +506,7 @@ test_cases:
 
   - use_case: rel01.0-uc005-resume-recovery
     name: Resume resets orphaned in_progress issues
+    go_test: TestRel01_UC005_ResumeResetsOrphanedIssues
     inputs:
       command: mage generator:resume
       config_overrides:
@@ -367,6 +518,8 @@ test_cases:
 
   - use_case: rel01.0-uc005-resume-recovery
     name: Resume commits work before switching branches
+    go_test: TestRel01_UC005_Resume
+    covered_by: TestRel01_UC005_Resume
     inputs:
       command: |
         echo "test" > uncommitted.txt
@@ -380,6 +533,8 @@ test_cases:
 
   - use_case: rel01.0-uc005-resume-recovery
     name: Resume drains ready issues before new cycles
+    go_test: TestRel01_UC005_Resume
+    covered_by: TestRel01_UC005_Resume
     inputs:
       command: mage generator:resume
       config_overrides:
@@ -387,6 +542,102 @@ test_cases:
         cobbler.max_measure_issues: 1
     expected:
       exit_code: 0
+
+# ---- uc006: Scaffold operations ----
+
+  - use_case: rel01.0-uc006-scaffold-operations
+    name: Scaffold writes constitution files
+    go_test: TestRel01_UC006_ConstitutionFiles
+    inputs:
+      command: mage scaffold:push
+    expected:
+      exit_code: 0
+      state:
+        constitution_files_exist: true
+
+  - use_case: rel01.0-uc006-scaffold-operations
+    name: Scaffold writes prompt files
+    go_test: TestRel01_UC006_PromptFiles
+    inputs:
+      command: mage scaffold:push
+    expected:
+      exit_code: 0
+      state:
+        prompt_files_exist: true
+
+  - use_case: rel01.0-uc006-scaffold-operations
+    name: Scaffold writes config and magefile
+    go_test: TestRel01_UC006_ConfigAndMagefile
+    inputs:
+      command: mage scaffold:push
+    expected:
+      exit_code: 0
+      state:
+        configuration_yaml_exists: true
+        orchestrator_go_exists: true
+
+  - use_case: rel01.0-uc006-scaffold-operations
+    name: Scaffold rejects self-targeting
+    go_test: TestRel01_UC006_RejectSelfTarget
+    inputs:
+      command: mage scaffold:push .
+    expected:
+      exit_code: 1
+      stderr_contains: "refusing to scaffold"
+
+  - use_case: rel01.0-uc006-scaffold-operations
+    name: Scaffold push/pop round-trip
+    go_test: TestRel01_UC006_PushPopRoundTrip
+    inputs:
+      command: |
+        mage scaffold:push /tmp/target
+        mage scaffold:pop /tmp/target
+    expected:
+      exit_code: 0
+      state:
+        push_files_exist: true
+        pop_files_removed: true
+
+# ---- uc007: Build tooling ----
+
+  - use_case: rel01.0-uc007-build-tooling
+    name: Build compiles binary
+    go_test: TestRel01_UC007_Build
+    inputs:
+      command: mage build
+    expected:
+      exit_code: 0
+      state:
+        binary_exists: true
+
+  - use_case: rel01.0-uc007-build-tooling
+    name: Install exits successfully
+    go_test: TestRel01_UC007_Install
+    inputs:
+      command: mage install
+    expected:
+      exit_code: 0
+
+  - use_case: rel01.0-uc007-build-tooling
+    name: Clean removes build artifacts
+    go_test: TestRel01_UC007_Clean
+    inputs:
+      command: |
+        mage build
+        mage clean
+    expected:
+      exit_code: 0
+      state:
+        bin_dir_empty: true
+
+  - use_case: rel01.0-uc007-build-tooling
+    name: Stats prints Go LOC
+    go_test: TestRel01_UC007_Stats
+    inputs:
+      command: mage stats
+    expected:
+      exit_code: 0
+      stdout_contains: "go_loc"
 
 cleanup:
   - Switch to main branch

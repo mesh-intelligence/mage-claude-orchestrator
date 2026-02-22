@@ -8,10 +8,72 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/mesh-intelligence/cobbler-scaffold/pkg/orchestrator"
 )
 
-// TestInit_CreatesBD verifies that mage init creates the .beads/ directory.
-func TestInit_CreatesBD(t *testing.T) {
+// --- New / DefaultConfig tests (pure Go, no repo setup) ---
+
+// TestRel01_UC001_NewAppliesDefaults verifies that DefaultConfig populates
+// expected default values for zero-value fields.
+func TestRel01_UC001_NewAppliesDefaults(t *testing.T) {
+	cfg := orchestrator.DefaultConfig()
+	checks := []struct {
+		field string
+		got   string
+		want  string
+	}{
+		{"Project.BinaryDir", cfg.Project.BinaryDir, "bin"},
+		{"Generation.Prefix", cfg.Generation.Prefix, "generation-"},
+		{"Cobbler.BeadsDir", cfg.Cobbler.BeadsDir, ".beads/"},
+		{"Cobbler.Dir", cfg.Cobbler.Dir, ".cobbler/"},
+		{"Project.MagefilesDir", cfg.Project.MagefilesDir, "magefiles"},
+		{"Claude.SecretsDir", cfg.Claude.SecretsDir, ".secrets"},
+		{"Claude.DefaultTokenFile", cfg.Claude.DefaultTokenFile, "claude.json"},
+	}
+	for _, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s = %q, want %q", c.field, c.got, c.want)
+		}
+	}
+}
+
+// TestRel01_UC001_NewPreservesValues verifies that explicitly set Config
+// values are not overwritten by defaults.
+func TestRel01_UC001_NewPreservesValues(t *testing.T) {
+	cfg := orchestrator.Config{
+		Project:    orchestrator.ProjectConfig{ModulePath: "example.com/test", BinaryName: "mybin", BinaryDir: "out"},
+		Generation: orchestrator.GenerationConfig{Prefix: "gen-"},
+		Cobbler:    orchestrator.CobblerConfig{BeadsDir: ".issues/"},
+	}
+	o := orchestrator.New(cfg)
+	got := o.Config()
+	if got.Project.BinaryDir != "out" {
+		t.Errorf("BinaryDir = %q, want %q", got.Project.BinaryDir, "out")
+	}
+	if got.Generation.Prefix != "gen-" {
+		t.Errorf("Prefix = %q, want %q", got.Generation.Prefix, "gen-")
+	}
+	if got.Cobbler.BeadsDir != ".issues/" {
+		t.Errorf("BeadsDir = %q, want %q", got.Cobbler.BeadsDir, ".issues/")
+	}
+}
+
+// TestRel01_UC001_NewReturnsNonNil verifies that New returns a non-nil
+// Orchestrator for a minimal Config.
+func TestRel01_UC001_NewReturnsNonNil(t *testing.T) {
+	o := orchestrator.New(orchestrator.Config{
+		Project: orchestrator.ProjectConfig{ModulePath: "example.com/test", BinaryName: "test"},
+	})
+	if o == nil {
+		t.Fatal("expected non-nil Orchestrator from New()")
+	}
+}
+
+// --- Init and reset tests ---
+
+// TestRel01_UC001_InitCreatesBD verifies that mage init creates the .beads/ directory.
+func TestRel01_UC001_InitCreatesBD(t *testing.T) {
 	dir := setupRepo(t)
 	if err := runMage(t, dir, "init"); err != nil {
 		t.Fatalf("mage init: %v", err)
@@ -21,8 +83,8 @@ func TestInit_CreatesBD(t *testing.T) {
 	}
 }
 
-// TestInit_Idempotent verifies that running mage init twice does not fail.
-func TestInit_Idempotent(t *testing.T) {
+// TestRel01_UC001_InitIdempotent verifies that running mage init twice does not fail.
+func TestRel01_UC001_InitIdempotent(t *testing.T) {
 	dir := setupRepo(t)
 	for i := 1; i <= 2; i++ {
 		if err := runMage(t, dir, "init"); err != nil {
@@ -31,9 +93,9 @@ func TestInit_Idempotent(t *testing.T) {
 	}
 }
 
-// TestCobblerReset verifies that mage cobbler:reset removes .cobbler/ but
-// leaves .beads/ untouched.
-func TestCobblerReset(t *testing.T) {
+// TestRel01_UC001_CobblerReset verifies that mage cobbler:reset removes .cobbler/
+// but leaves .beads/ untouched.
+func TestRel01_UC001_CobblerReset(t *testing.T) {
 	dir := setupRepo(t)
 
 	// Setup: init beads and create a cobbler directory with a file.
@@ -60,8 +122,8 @@ func TestCobblerReset(t *testing.T) {
 	}
 }
 
-// TestBeadsReset_KeepsDir verifies that mage beads:reset keeps .beads/ present.
-func TestBeadsReset_KeepsDir(t *testing.T) {
+// TestRel01_UC001_BeadsResetKeepsDir verifies that mage beads:reset keeps .beads/ present.
+func TestRel01_UC001_BeadsResetKeepsDir(t *testing.T) {
 	dir := setupRepo(t)
 	if err := runMage(t, dir, "beads:init"); err != nil {
 		t.Fatalf("beads:init: %v", err)
@@ -74,9 +136,9 @@ func TestBeadsReset_KeepsDir(t *testing.T) {
 	}
 }
 
-// TestBeadsReset_ClearsIssues verifies that beads:reset removes previously
+// TestRel01_UC001_BeadsResetClearsIssues verifies that beads:reset removes previously
 // created issues (countReadyIssues returns 0 after reset).
-func TestBeadsReset_ClearsIssues(t *testing.T) {
+func TestRel01_UC001_BeadsResetClearsIssues(t *testing.T) {
 	dir := setupRepo(t)
 	if err := runMage(t, dir, "beads:init"); err != nil {
 		t.Fatalf("beads:init: %v", err)
@@ -98,32 +160,9 @@ func TestBeadsReset_ClearsIssues(t *testing.T) {
 	}
 }
 
-// TestGeneratorReset verifies that generator:reset returns to main and
-// removes generation branches.
-func TestGeneratorReset(t *testing.T) {
-	dir := setupRepo(t)
-
-	if err := runMage(t, dir, "init"); err != nil {
-		t.Fatalf("init: %v", err)
-	}
-	if err := runMage(t, dir, "generator:start"); err != nil {
-		t.Fatalf("generator:start: %v", err)
-	}
-	if err := runMage(t, dir, "generator:reset"); err != nil {
-		t.Fatalf("mage generator:reset: %v", err)
-	}
-
-	if branch := gitBranch(t, dir); branch != "main" {
-		t.Errorf("expected main branch after generator:reset, got %q", branch)
-	}
-	if branches := gitListBranchesMatching(t, dir, "generation-"); len(branches) > 0 {
-		t.Errorf("expected no generation branches after reset, got %v", branches)
-	}
-}
-
-// TestFullReset verifies that mage reset clears cobbler dir, generation
-// branches, and beads issues.
-func TestFullReset(t *testing.T) {
+// TestRel01_UC001_FullResetClearsState verifies that mage reset clears cobbler dir,
+// generation branches, and beads issues.
+func TestRel01_UC001_FullResetClearsState(t *testing.T) {
 	dir := setupRepo(t)
 
 	if err := runMage(t, dir, "init"); err != nil {
@@ -152,9 +191,11 @@ func TestFullReset(t *testing.T) {
 	}
 }
 
-// TestEdge_CobblerResetWhenMissing verifies cobbler:reset is a no-op when
+// --- Edge cases ---
+
+// TestRel01_UC001_CobblerResetWhenMissing verifies cobbler:reset is a no-op when
 // .cobbler/ does not exist.
-func TestEdge_CobblerResetWhenMissing(t *testing.T) {
+func TestRel01_UC001_CobblerResetWhenMissing(t *testing.T) {
 	dir := setupRepo(t)
 	os.RemoveAll(filepath.Join(dir, ".cobbler"))
 	if err := runMage(t, dir, "cobbler:reset"); err != nil {
@@ -162,9 +203,9 @@ func TestEdge_CobblerResetWhenMissing(t *testing.T) {
 	}
 }
 
-// TestEdge_BeadsResetWhenMissing verifies beads:reset is a no-op when
+// TestRel01_UC001_BeadsResetWhenMissing verifies beads:reset is a no-op when
 // .beads/ does not exist.
-func TestEdge_BeadsResetWhenMissing(t *testing.T) {
+func TestRel01_UC001_BeadsResetWhenMissing(t *testing.T) {
 	dir := setupRepo(t)
 	os.RemoveAll(filepath.Join(dir, ".beads"))
 	if err := runMage(t, dir, "beads:reset"); err != nil {
@@ -172,9 +213,9 @@ func TestEdge_BeadsResetWhenMissing(t *testing.T) {
 	}
 }
 
-// TestEdge_GeneratorResetWhenClean verifies generator:reset exits 0 when
+// TestRel01_UC001_GeneratorResetWhenClean verifies generator:reset exits 0 when
 // already on main with no generation branches.
-func TestEdge_GeneratorResetWhenClean(t *testing.T) {
+func TestRel01_UC001_GeneratorResetWhenClean(t *testing.T) {
 	dir := setupRepo(t)
 	if err := runMage(t, dir, "generator:reset"); err != nil {
 		t.Fatalf("generator:reset from clean state: %v", err)

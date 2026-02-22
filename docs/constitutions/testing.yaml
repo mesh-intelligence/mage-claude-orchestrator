@@ -1,0 +1,61 @@
+# Copyright (c) 2026 Petar Djukic. All rights reserved.
+# SPDX-License-Identifier: MIT
+#
+# Testing Constitution
+#
+# This constitution defines naming conventions, file organization, and
+# traceability rules for Go tests. It is scaffolded into consuming projects
+# so Claude and contributors follow a consistent test structure.
+
+articles:
+  - id: T1
+    title: Test naming convention
+    rule: |
+      Name every E2E test function TestRel{NN}_UC{NNN}_DescriptiveName where
+      Rel{NN} is the release number (zero-padded, e.g., Rel01) and UC{NNN} is
+      the use case number (zero-padded, e.g., UC003). DescriptiveName uses
+      CamelCase and describes the behavior under test in action-outcome form
+      (e.g., MeasureCreatesIssues, StartFailsWhenNotOnMain).
+
+      This convention enables filtering by release suite or use case:
+
+        go test -run TestRel01 ./tests/e2e/...          # entire suite
+        go test -run TestRel01_UC003 ./tests/e2e/...    # one use case
+        go test -run TestRel01_UC003_Measure ./tests/e2e/...  # one test
+
+  - id: T2
+    title: File organization
+    rule: |
+      Place tests in one file per use case, named uc{NNN}_{slug}_test.go
+      (e.g., uc001_init_test.go, uc003_measure_test.go). Shared test
+      infrastructure (setup, helpers, TestMain) lives in helpers_test.go.
+      Do not mix tests from different use cases in the same file.
+
+  - id: T3
+    title: Bidirectional traceability
+    rule: |
+      Every test_cases entry in the test suite spec (docs/specs/test-suites/)
+      must have a go_test field naming the Go test function that implements it.
+      Every Go test function in tests/e2e/ must appear as a go_test value in
+      the spec. No orphans in either direction.
+
+      When one Go test covers multiple spec test cases, each spec entry lists
+      the same go_test value. The spec entry with the closest name match is
+      the primary; others are annotated with covered_by.
+
+  - id: T4
+    title: Supersedes prior convention
+    rule: |
+      This constitution supersedes the test_suite guidance in design.yaml
+      that called for tests in tests/rel-NNN/ directories with t.Run
+      sub-tests. The flat TestRel{NN}_UC{NNN}_Name convention in tests/e2e/
+      is the current standard.
+
+  - id: T5
+    title: Test count invariant
+    rule: |
+      The number of Go test functions in a release suite must be greater than
+      or equal to the number of test_cases entries in the corresponding spec.
+      Tests may exceed the spec count (edge cases, performance tests) but must
+      never fall below it. Renaming or reorganizing tests must not reduce the
+      total count.

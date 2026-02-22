@@ -359,3 +359,40 @@ func copyFile(src, dst string) error {
 	_, err = io.Copy(out, in)
 	return err
 }
+
+// issueHasField checks whether any issue listed by "bd list --json" contains
+// the given field name in its JSON output.
+func issueHasField(t *testing.T, dir, field string) bool {
+	t.Helper()
+	cmd := exec.Command("bd", "list", "--json")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bd list --json: %v\n%s", err, out)
+	}
+	return strings.Contains(string(out), field)
+}
+
+// containsField checks whether a JSON string contains the given field value.
+func containsField(jsonStr, value string) bool {
+	return strings.Contains(jsonStr, value)
+}
+
+// createIssue creates a beads issue via the bd CLI and returns the issue ID.
+func createIssue(t *testing.T, dir, title string) string {
+	t.Helper()
+	cmd := exec.Command("bd", "create", "--type", "task",
+		"--title", title, "--description", "created by e2e test")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bd create: %v\n%s", err, out)
+	}
+	// bd create outputs the issue ID as the first word on the first line.
+	output := strings.TrimSpace(string(out))
+	parts := strings.Fields(output)
+	if len(parts) == 0 {
+		t.Fatalf("bd create returned empty output")
+	}
+	return parts[0]
+}

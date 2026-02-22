@@ -106,7 +106,7 @@ func countLines(path string) (int, error) {
 func countWordsInGlob(pattern string) (int, error) {
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
-		return 0, nil
+		return 0, err
 	}
 	total := 0
 	for _, path := range matches {

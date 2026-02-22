@@ -157,7 +157,7 @@ func gitRevParseHEAD() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(out[:len(out)-1]), nil
+	return strings.TrimSpace(string(out)), nil
 }
 
 func gitResetSoft(ref string) error {
@@ -185,7 +185,7 @@ func gitCurrentBranch() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(out[:len(out)-1]), nil // trim trailing newline
+	return strings.TrimSpace(string(out)), nil
 }
 
 // gitCountCommits returns the number of commits reachable from toRef

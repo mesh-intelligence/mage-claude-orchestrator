@@ -165,11 +165,6 @@ type ClaudeConfig struct {
 	MaxTimeSec int `yaml:"max_time_sec"`
 }
 
-// ClaudeTimeout returns the max time as a time.Duration.
-func (c *ClaudeConfig) ClaudeTimeout() time.Duration {
-	return time.Duration(c.MaxTimeSec) * time.Second
-}
-
 // Config holds all orchestrator settings. Consuming repos either
 // construct a Config in Go code and pass it to New(), or place a
 // configuration.yaml at the repository root and call NewFromFile().
@@ -239,7 +234,21 @@ func (c *Config) EffectiveTokenFile() string {
 
 // ClaudeTimeout returns the max Claude invocation time as a Duration.
 func (c *Config) ClaudeTimeout() time.Duration {
-	return c.Claude.ClaudeTimeout()
+	return time.Duration(c.Claude.MaxTimeSec) * time.Second
+}
+
+// readFileInto reads the file at the path stored in *field and replaces
+// the value with the file content. If *field is empty, it is a no-op.
+func readFileInto(field *string) error {
+	if *field == "" {
+		return nil
+	}
+	content, err := os.ReadFile(*field)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", *field, err)
+	}
+	*field = string(content)
+	return nil
 }
 
 func (c *Config) applyDefaults() {
@@ -318,50 +327,19 @@ func LoadConfig(path string) (Config, error) {
 		cfg.Project.SeedFiles[dest] = string(content)
 	}
 
-	// Read prompt template files from disk.
-	if cfg.Cobbler.MeasurePrompt != "" {
-		content, err := os.ReadFile(cfg.Cobbler.MeasurePrompt)
-		if err != nil {
-			return Config{}, fmt.Errorf("reading measure prompt %s: %w", cfg.Cobbler.MeasurePrompt, err)
+	// Read prompt and constitution files from disk, replacing the path
+	// with the file content.
+	for _, field := range []*string{
+		&cfg.Cobbler.MeasurePrompt,
+		&cfg.Cobbler.StitchPrompt,
+		&cfg.Cobbler.PlanningConstitution,
+		&cfg.Cobbler.ExecutionConstitution,
+		&cfg.Cobbler.DesignConstitution,
+		&cfg.Cobbler.GoStyleConstitution,
+	} {
+		if err := readFileInto(field); err != nil {
+			return Config{}, err
 		}
-		cfg.Cobbler.MeasurePrompt = string(content)
-	}
-	if cfg.Cobbler.StitchPrompt != "" {
-		content, err := os.ReadFile(cfg.Cobbler.StitchPrompt)
-		if err != nil {
-			return Config{}, fmt.Errorf("reading stitch prompt %s: %w", cfg.Cobbler.StitchPrompt, err)
-		}
-		cfg.Cobbler.StitchPrompt = string(content)
-	}
-
-	// Read constitution files from disk.
-	if cfg.Cobbler.PlanningConstitution != "" {
-		content, err := os.ReadFile(cfg.Cobbler.PlanningConstitution)
-		if err != nil {
-			return Config{}, fmt.Errorf("reading planning constitution %s: %w", cfg.Cobbler.PlanningConstitution, err)
-		}
-		cfg.Cobbler.PlanningConstitution = string(content)
-	}
-	if cfg.Cobbler.ExecutionConstitution != "" {
-		content, err := os.ReadFile(cfg.Cobbler.ExecutionConstitution)
-		if err != nil {
-			return Config{}, fmt.Errorf("reading execution constitution %s: %w", cfg.Cobbler.ExecutionConstitution, err)
-		}
-		cfg.Cobbler.ExecutionConstitution = string(content)
-	}
-	if cfg.Cobbler.DesignConstitution != "" {
-		content, err := os.ReadFile(cfg.Cobbler.DesignConstitution)
-		if err != nil {
-			return Config{}, fmt.Errorf("reading design constitution %s: %w", cfg.Cobbler.DesignConstitution, err)
-		}
-		cfg.Cobbler.DesignConstitution = string(content)
-	}
-	if cfg.Cobbler.GoStyleConstitution != "" {
-		content, err := os.ReadFile(cfg.Cobbler.GoStyleConstitution)
-		if err != nil {
-			return Config{}, fmt.Errorf("reading go style constitution %s: %w", cfg.Cobbler.GoStyleConstitution, err)
-		}
-		cfg.Cobbler.GoStyleConstitution = string(content)
 	}
 
 	cfg.applyDefaults()

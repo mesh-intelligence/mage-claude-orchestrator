@@ -86,7 +86,7 @@ func (o *Orchestrator) Analyze() error {
 	if data, err := os.ReadFile("docs/road-map.yaml"); err == nil {
 		var roadmap struct {
 			Releases []struct {
-				ID       string `yaml:"id"`
+				ID       string `yaml:"version"`
 				UseCases []struct {
 					ID string `yaml:"id"`
 				} `yaml:"use_cases"`
@@ -94,7 +94,11 @@ func (o *Orchestrator) Analyze() error {
 		}
 		if err := yaml.Unmarshal(data, &roadmap); err == nil {
 			for _, release := range roadmap.Releases {
-				roadmapReleaseIDs[release.ID] = true
+				// Only track releases that have use cases; empty
+				// buckets (e.g. 99.0 Unscheduled) don't need test suites.
+				if len(release.UseCases) > 0 {
+					roadmapReleaseIDs[release.ID] = true
+				}
 				for _, uc := range release.UseCases {
 					roadmapUCs[uc.ID] = true
 				}
@@ -118,7 +122,7 @@ func (o *Orchestrator) Analyze() error {
 
 	// Check 2: Releases in road-map.yaml without a test suite file
 	for releaseID := range roadmapReleaseIDs {
-		if !testSuiteIDs["test-"+releaseID] {
+		if !testSuiteIDs["test-rel"+releaseID] {
 			result.ReleasesWithoutTestSuites = append(result.ReleasesWithoutTestSuites, releaseID)
 		}
 	}

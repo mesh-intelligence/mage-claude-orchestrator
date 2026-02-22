@@ -45,16 +45,23 @@ type SourceFile struct {
 
 // VisionDoc corresponds to docs/VISION.yaml.
 type VisionDoc struct {
-	ID                   string        `yaml:"id"`
-	Title                string        `yaml:"title"`
-	ExecutiveSummary     string        `yaml:"executive_summary"`
-	Problem              string        `yaml:"problem"`
-	WhatThisDoes         string        `yaml:"what_this_does"`
-	WhyWeBuildThis       string        `yaml:"why_we_build_this"`
-	SuccessCriteria      []IDCriterion `yaml:"success_criteria"`
-	ImplementationPhases []Phase       `yaml:"implementation_phases"`
-	Risks                []Risk        `yaml:"risks"`
-	Not                  []string      `yaml:"not"`
+	ID                   string            `yaml:"id"`
+	Title                string            `yaml:"title"`
+	ExecutiveSummary     string            `yaml:"executive_summary"`
+	Problem              string            `yaml:"problem"`
+	WhatThisDoes         string            `yaml:"what_this_does"`
+	WhyWeBuildThis       string            `yaml:"why_we_build_this"`
+	RelatedProjects      []RelatedProject  `yaml:"related_projects,omitempty"`
+	SuccessCriteria      map[string]string `yaml:"success_criteria"`
+	ImplementationPhases []Phase           `yaml:"implementation_phases"`
+	Risks                []Risk            `yaml:"risks"`
+	Not                  []string          `yaml:"not"`
+}
+
+// RelatedProject describes a project related to this one.
+type RelatedProject struct {
+	Project string `yaml:"project"`
+	Role    string `yaml:"role"`
 }
 
 // ---------------------------------------------------------------------------
@@ -63,16 +70,17 @@ type VisionDoc struct {
 
 // ArchitectureDoc corresponds to docs/ARCHITECTURE.yaml.
 type ArchitectureDoc struct {
-	ID                   string           `yaml:"id"`
-	Title                string           `yaml:"title"`
-	Overview             ArchOverview     `yaml:"overview"`
-	Interfaces           ArchInterfaces   `yaml:"interfaces"`
-	Components           []ArchComponent  `yaml:"components"`
-	DesignDecisions      []ArchDecision   `yaml:"design_decisions"`
-	TechnologyChoices    []ArchTech       `yaml:"technology_choices"`
-	ProjectStructure     []ArchPathRole   `yaml:"project_structure"`
-	ImplementationStatus ArchImplStatus   `yaml:"implementation_status"`
-	RelatedDocuments     []Reference      `yaml:"related_documents"`
+	ID                   string          `yaml:"id"`
+	Title                string          `yaml:"title"`
+	Overview             ArchOverview    `yaml:"overview"`
+	Interfaces           []ArchInterface `yaml:"interfaces"`
+	Components           []ArchComponent `yaml:"components"`
+	DesignDecisions      []ArchDecision  `yaml:"design_decisions"`
+	TechnologyChoices    []ArchTech      `yaml:"technology_choices"`
+	ProjectStructure     []ArchPathRole  `yaml:"project_structure"`
+	ImplementationStatus ArchImplStatus  `yaml:"implementation_status"`
+	RelatedDocuments     []ArchReference `yaml:"related_documents"`
+	Figures              []ArchFigure    `yaml:"figures,omitempty"`
 }
 
 type ArchOverview struct {
@@ -81,35 +89,34 @@ type ArchOverview struct {
 	CoordinationPattern string `yaml:"coordination_pattern"`
 }
 
-type ArchInterfaces struct {
-	DataStructures []ArchDataStructure `yaml:"data_structures"`
-	Operations     []ArchDataStructure `yaml:"operations"`
-	Announcements  []ArchDataStructure `yaml:"announcements"`
-}
-
-type ArchDataStructure struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
+// ArchInterface describes a named interface grouping with its
+// data structures and operations.
+type ArchInterface struct {
+	Name           string   `yaml:"name"`
+	Summary        string   `yaml:"summary"`
+	DataStructures []string `yaml:"data_structures,omitempty"`
+	Operations     []string `yaml:"operations,omitempty"`
 }
 
 type ArchComponent struct {
-	Name           string      `yaml:"name"`
-	Responsibility string      `yaml:"responsibility"`
-	Capabilities   []yaml.Node `yaml:"capabilities"`
-	References     string      `yaml:"references,omitempty"`
+	Name           string   `yaml:"name"`
+	Responsibility string   `yaml:"responsibility"`
+	Capabilities   []string `yaml:"capabilities"`
+	References     []string `yaml:"references,omitempty"`
 }
 
 type ArchDecision struct {
-	ID                   string      `yaml:"id"`
-	Title                string      `yaml:"title"`
-	Decision             string      `yaml:"decision"`
-	Benefits             []yaml.Node `yaml:"benefits"`
-	AlternativesRejected []yaml.Node `yaml:"alternatives_rejected"`
+	ID                   int      `yaml:"id"`
+	Title                string   `yaml:"title"`
+	Decision             string   `yaml:"decision"`
+	Benefits             []string `yaml:"benefits"`
+	AlternativesRejected []string `yaml:"alternatives_rejected"`
 }
 
 type ArchTech struct {
+	Component  string `yaml:"component"`
 	Technology string `yaml:"technology"`
-	Reason     string `yaml:"reason"`
+	Purpose    string `yaml:"purpose"`
 }
 
 type ArchPathRole struct {
@@ -118,15 +125,20 @@ type ArchPathRole struct {
 }
 
 type ArchImplStatus struct {
-	Note       string            `yaml:"note"`
-	Components []ArchStatusEntry `yaml:"components"`
+	CurrentFocus string              `yaml:"current_focus"`
+	Progress     []map[string]string `yaml:"progress"`
 }
 
-type ArchStatusEntry struct {
-	Component string `yaml:"component"`
-	Status    string `yaml:"status"`
-	Release   string `yaml:"release,omitempty"`
-	Note      string `yaml:"note,omitempty"`
+// ArchReference is a related-document entry in ARCHITECTURE.yaml.
+type ArchReference struct {
+	Doc     string `yaml:"doc"`
+	Purpose string `yaml:"purpose"`
+}
+
+// ArchFigure is an architecture diagram reference.
+type ArchFigure struct {
+	Path    string `yaml:"path"`
+	Caption string `yaml:"caption"`
 }
 
 // ---------------------------------------------------------------------------
@@ -135,15 +147,17 @@ type ArchStatusEntry struct {
 
 // SpecificationsDoc corresponds to docs/SPECIFICATIONS.yaml.
 type SpecificationsDoc struct {
-	ID                  string          `yaml:"id"`
-	Title               string          `yaml:"title"`
-	Overview            string          `yaml:"overview"`
-	RoadmapSummary      []SpecRelease   `yaml:"roadmap_summary"`
-	PRDIndex            []SpecIndex     `yaml:"prd_index"`
-	UseCaseIndex        []SpecIndex     `yaml:"use_case_index"`
-	TestSuiteIndex      []TestSuiteRef  `yaml:"test_suite_index"`
-	PRDToUseCaseMapping []PRDUseCaseMap `yaml:"prd_to_use_case_mapping"`
-	CoverageGaps        string          `yaml:"coverage_gaps"`
+	ID                   string          `yaml:"id"`
+	Title                string          `yaml:"title"`
+	Overview             string          `yaml:"overview"`
+	RoadmapSummary       []SpecRelease   `yaml:"roadmap_summary"`
+	PRDIndex             []SpecIndex     `yaml:"prd_index"`
+	UseCaseIndex         []SpecIndex     `yaml:"use_case_index"`
+	TestSuiteIndex       []TestSuiteRef  `yaml:"test_suite_index"`
+	PRDToUseCaseMapping  []PRDUseCaseMap `yaml:"prd_to_use_case_mapping"`
+	TraceabilityDiagram  string          `yaml:"traceability_diagram,omitempty"`
+	CoverageGaps         string          `yaml:"coverage_gaps"`
+	References           []string        `yaml:"references,omitempty"`
 }
 
 type SpecRelease struct {
@@ -167,6 +181,7 @@ type SpecIndex struct {
 type TestSuiteRef struct {
 	ID            string   `yaml:"id"`
 	Title         string   `yaml:"title"`
+	Release       string   `yaml:"release"`
 	Traces        []string `yaml:"traces"`
 	TestCaseCount int      `yaml:"test_case_count"`
 	Path          string   `yaml:"path"`
@@ -185,21 +200,24 @@ type PRDUseCaseMap struct {
 
 // RoadmapDoc corresponds to docs/road-map.yaml.
 type RoadmapDoc struct {
-	ID       string           `yaml:"id"`
-	Title    string           `yaml:"title"`
-	Releases []RoadmapRelease `yaml:"releases"`
+	ID             string           `yaml:"id"`
+	Title          string           `yaml:"title"`
+	Releases       []RoadmapRelease `yaml:"releases"`
+	Prioritization []string         `yaml:"prioritization,omitempty"`
 }
 
 type RoadmapRelease struct {
-	ID       string           `yaml:"id"`
-	Name     string           `yaml:"name"`
-	Focus    string           `yaml:"focus"`
-	UseCases []RoadmapUseCase `yaml:"use_cases"`
+	Version     string           `yaml:"version"`
+	Name        string           `yaml:"name"`
+	Status      string           `yaml:"status"`
+	Description string           `yaml:"description,omitempty"`
+	UseCases    []RoadmapUseCase `yaml:"use_cases"`
 }
 
 type RoadmapUseCase struct {
-	ID     string `yaml:"id"`
-	Status string `yaml:"status"`
+	ID      string `yaml:"id"`
+	Summary string `yaml:"summary,omitempty"`
+	Status  string `yaml:"status"`
 }
 
 // ---------------------------------------------------------------------------
@@ -221,25 +239,25 @@ type SpecsCollection struct {
 // ---------------------------------------------------------------------------
 
 // PRDDoc corresponds to docs/specs/product-requirements/prd*.yaml.
+// Goals use "- G1: text" format (list of single-key maps).
+// Requirements use a map keyed by group ID (R1, R2, ...).
+// AcceptanceCriteria are plain strings.
 type PRDDoc struct {
-	ID                 string             `yaml:"id"`
-	Title              string             `yaml:"title"`
-	Problem            string             `yaml:"problem"`
-	Goals              []IDGoal           `yaml:"goals"`
-	Requirements       []RequirementGroup `yaml:"requirements"`
-	NonGoals           []string           `yaml:"non_goals"`
-	AcceptanceCriteria []IDCriterion      `yaml:"acceptance_criteria"`
+	ID                 string                        `yaml:"id"`
+	Title              string                        `yaml:"title"`
+	Problem            string                        `yaml:"problem"`
+	Goals              []map[string]string           `yaml:"goals"`
+	Requirements       map[string]PRDRequirementGroup `yaml:"requirements"`
+	NonGoals           []string                      `yaml:"non_goals"`
+	AcceptanceCriteria []string                      `yaml:"acceptance_criteria"`
+	References         []string                      `yaml:"references,omitempty"`
 }
 
-type RequirementGroup struct {
-	Group string            `yaml:"group"`
-	Title string            `yaml:"title"`
-	Items []RequirementItem `yaml:"items"`
-}
-
-type RequirementItem struct {
-	ID          string `yaml:"id"`
-	Requirement string `yaml:"requirement"`
+// PRDRequirementGroup is a requirement section within a PRD.
+// Items use "- R1.1: text" format (list of single-key maps).
+type PRDRequirementGroup struct {
+	Title string              `yaml:"title"`
+	Items []map[string]string `yaml:"items"`
 }
 
 // ---------------------------------------------------------------------------
@@ -247,22 +265,20 @@ type RequirementItem struct {
 // ---------------------------------------------------------------------------
 
 // UseCaseDoc corresponds to docs/specs/use-cases/rel*.yaml.
+// Flow, touchpoints, and success_criteria use "- KEY: text" format.
 type UseCaseDoc struct {
 	ID              string              `yaml:"id"`
 	Title           string              `yaml:"title"`
 	Summary         string              `yaml:"summary"`
 	Actor           string              `yaml:"actor"`
 	Trigger         string              `yaml:"trigger"`
-	Flow            []FlowStep          `yaml:"flow"`
+	Flow            []map[string]string `yaml:"flow"`
 	Touchpoints     []map[string]string `yaml:"touchpoints"`
-	SuccessCriteria []IDCriterion       `yaml:"success_criteria"`
+	SuccessCriteria []map[string]string `yaml:"success_criteria"`
+	Dependencies    []map[string]string `yaml:"dependencies,omitempty"`
+	Risks           []map[string]string `yaml:"risks,omitempty"`
 	OutOfScope      []string            `yaml:"out_of_scope"`
-	TestSuite       string              `yaml:"test_suite"`
-}
-
-type FlowStep struct {
-	ID   string `yaml:"id"`
-	Step string `yaml:"step"`
+	TestSuite       string              `yaml:"test_suite,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -275,34 +291,22 @@ type TestSuiteDoc struct {
 	Title         string     `yaml:"title"`
 	Release       string     `yaml:"release"`
 	Traces        []string   `yaml:"traces"`
-	Preconditions string     `yaml:"preconditions"`
+	Tags          []string   `yaml:"tags,omitempty"`
+	Preconditions []string   `yaml:"preconditions"`
 	TestCases     []TestCase `yaml:"test_cases"`
+	Cleanup       []string   `yaml:"cleanup,omitempty"`
 }
 
+// TestCase uses yaml.Node for Inputs and Expected because test suites
+// across releases have different field schemas (CLI tests vs UI tests).
 type TestCase struct {
-	Name          string           `yaml:"name"`
-	Description   string           `yaml:"description"`
-	Inputs        TestCaseInputs   `yaml:"inputs"`
-	Normalization string           `yaml:"normalization"`
-	Expected      TestCaseExpected `yaml:"expected"`
-	Traces        []string         `yaml:"traces"`
-}
-
-type TestCaseInputs struct {
-	Args  []string `yaml:"args"`
-	Stdin string   `yaml:"stdin"`
-	Env   []string `yaml:"env"`
-}
-
-// TestCaseExpected holds the expected output for a test case.
-// ExitCode is interface{} because test specs use both integer values
-// (0, 1) and string values ("non-zero").
-type TestCaseExpected struct {
-	ExitCode        interface{} `yaml:"exit_code"`
-	Stdout          string      `yaml:"stdout,omitempty"`
-	StdoutStructure string      `yaml:"stdout_structure,omitempty"`
-	Stderr          string      `yaml:"stderr,omitempty"`
-	StderrContains  string      `yaml:"stderr_contains,omitempty"`
+	UseCase       string    `yaml:"use_case,omitempty"`
+	Name          string    `yaml:"name"`
+	Description   string    `yaml:"description,omitempty"`
+	Inputs        yaml.Node `yaml:"inputs"`
+	Normalization string    `yaml:"normalization,omitempty"`
+	Expected      yaml.Node `yaml:"expected"`
+	Traces        []string  `yaml:"traces,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -310,23 +314,18 @@ type TestCaseExpected struct {
 // ---------------------------------------------------------------------------
 
 // EngineeringDoc corresponds to docs/engineering/eng*.yaml.
+// References are plain strings (file paths or document IDs).
 type EngineeringDoc struct {
 	ID           string       `yaml:"id"`
 	Title        string       `yaml:"title"`
 	Introduction string       `yaml:"introduction"`
 	Sections     []DocSection `yaml:"sections"`
-	References   []Reference  `yaml:"references,omitempty"`
+	References   []string     `yaml:"references,omitempty"`
 }
 
 type DocSection struct {
 	Title   string `yaml:"title"`
 	Content string `yaml:"content"`
-}
-
-type Reference struct {
-	ID   string `yaml:"id"`
-	Path string `yaml:"path"`
-	Note string `yaml:"note"`
 }
 
 // ---------------------------------------------------------------------------
@@ -346,25 +345,15 @@ type ConstitutionsDoc struct {
 // Shared field types
 // ---------------------------------------------------------------------------
 
-type IDCriterion struct {
-	ID        string `yaml:"id"`
-	Criterion string `yaml:"criterion"`
-}
-
-type IDGoal struct {
-	ID   string `yaml:"id"`
-	Goal string `yaml:"goal"`
-}
-
+// Phase represents an implementation phase in the vision document.
+// Phase ID is a string (e.g. "01.0") and Deliverables is a scalar string.
 type Phase struct {
-	Phase        int      `yaml:"phase"`
-	Name         string   `yaml:"name"`
-	Focus        string   `yaml:"focus"`
-	Deliverables []string `yaml:"deliverables"`
+	Phase        string `yaml:"phase"`
+	Focus        string `yaml:"focus"`
+	Deliverables string `yaml:"deliverables"`
 }
 
 type Risk struct {
-	ID         string `yaml:"id"`
 	Risk       string `yaml:"risk"`
 	Impact     string `yaml:"impact"`
 	Likelihood string `yaml:"likelihood"`

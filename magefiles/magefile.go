@@ -43,6 +43,9 @@ type Stats mg.Namespace
 // Test groups the testing targets.
 type Test mg.Namespace
 
+// Vscode groups the VS Code extension build and install targets.
+type Vscode mg.Namespace
+
 // baseCfg holds the configuration loaded from configuration.yaml.
 var baseCfg orchestrator.Config
 
@@ -252,3 +255,11 @@ func (Podman) Build() error { return newOrch().BuildImage() }
 
 // Clean removes all podman containers created from the configured image.
 func (Podman) Clean() error { return newOrch().PodmanClean() }
+
+// --- Vscode targets ---
+
+// Push compiles the extension and installs it into VS Code.
+func (Vscode) Push() error { return newOrch().VscodePush() }
+
+// Pop uninstalls the extension from VS Code.
+func (Vscode) Pop() error { return newOrch().VscodePop() }

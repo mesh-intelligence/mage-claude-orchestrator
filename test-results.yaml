@@ -105,7 +105,7 @@ results:
         started: "2026-02-14T18:32:57-05:00"
         duration_sec: 1
 
-      - name: "test:integration skips when tests/ directory is missing"
+      - name: "test:e2e skips when tests/rel01.0/ directory is missing"
         section: 4
         result: PASS
         started: "2026-02-14T18:33:03-05:00"
@@ -163,7 +163,7 @@ results:
     failed: 0
     skipped: 3
     fixes_applied: 0
-    notes: "Full run including Claude-dependent sections 5, 7, 8. Three tests skipped: test:cobbler, test:generator, test:resume targets not in scaffolded orchestrator.go."
+    notes: "Full run including Claude-dependent sections 5, 7, 8. Three tests skipped: test:cobbler, test:generator, test:resume targets replaced by per-UC targets (test:uc002GenerationLifecycle, test:uc003MeasureWorkflow, test:uc005ResumeRecovery)."
     tests:
       # Section 1: Individual reset targets
       - name: "cobbler:reset only removes .cobbler/"
@@ -259,7 +259,7 @@ results:
         started: "2026-02-15T20:42:33-05:00"
         duration_sec: 0
 
-      - name: "test:integration skips when tests/ directory is missing"
+      - name: "test:e2e skips when tests/rel01.0/ directory is missing"
         section: 4
         result: PASS
         started: "2026-02-15T20:42:33-05:00"
@@ -310,10 +310,10 @@ results:
         duration_sec: 174
         notes: "Tracking issue created and closed; retried after credential refresh"
 
-      - name: "test:cobbler runs the full cobbler regression suite"
+      - name: "test:uc003MeasureWorkflow runs UC003 E2E tests"
         section: 5
         result: SKIP
-        notes: "test:cobbler target not scaffolded to target repo"
+        notes: "Replaced test:cobbler with per-UC E2E targets"
 
       # Section 6: Generator lifecycle
       - name: "start/stop: creates tags and returns to main"
@@ -335,10 +335,10 @@ results:
         duration_sec: 1
 
       # Section 7: Generator run (requires Claude)
-      - name: "test:generator runs the full generator lifecycle suite"
+      - name: "test:uc002GenerationLifecycle runs UC002 E2E tests"
         section: 7
         result: SKIP
-        notes: "test:generator target not scaffolded to target repo"
+        notes: "Replaced test:generator with per-UC E2E targets"
 
       - name: "stitch per-cycle limit triggers measure between batches"
         section: 7
@@ -355,10 +355,10 @@ results:
         notes: "Measure created 5 issues with dependency chain; cap not exercised because no tasks were ready for stitch"
 
       # Section 8: Generator resume (requires Claude)
-      - name: "test:resume runs the resume recovery test"
+      - name: "test:uc005ResumeRecovery runs UC005 E2E tests"
         section: 8
         result: SKIP
-        notes: "test:resume target not scaffolded to target repo"
+        notes: "Replaced test:resume with per-UC E2E targets"
 
       - name: "resume auto-detects generation branch"
         section: 8

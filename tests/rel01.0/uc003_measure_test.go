@@ -73,7 +73,7 @@ func TestRel01_UC003_BeadsResetClearsAfterMeasure(t *testing.T) {
 // TestRel01_UC003_TimingByLimit runs measure with limits 1 through 5 and logs
 // the wall-clock time and issue count for each.
 //
-//	go test -v -count=1 -timeout 0 -run TestRel01_UC003_TimingByLimit ./tests/e2e/...
+//	go test -v -count=1 -timeout 0 -run TestRel01_UC003_TimingByLimit ./tests/rel01.0/...
 func TestRel01_UC003_TimingByLimit(t *testing.T) {
 	dir := setupRepo(t)
 	setupClaude(t, dir)

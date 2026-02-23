@@ -144,10 +144,26 @@ func (o *Orchestrator) Scaffold(targetDir, orchestratorRoot string) error {
 		return fmt.Errorf("wiring magefiles/go.mod: %w", err)
 	}
 
-	// 5. Verify.
+	// 5. Verify. If verification fails and we used a published version,
+	// retry with a local replace — the published module may be missing
+	// methods that the scaffolded orchestrator.go references.
 	logf("scaffold: verifying with mage -l")
 	if err := verifyMage(targetDir); err != nil {
-		return fmt.Errorf("mage verification: %w", err)
+		logf("scaffold: verification failed; retrying with local replace -> %s", absOrch)
+		retryReplace := exec.Command(binGo, "mod", "edit",
+			"-replace", orchestratorModule+"="+absOrch)
+		retryReplace.Dir = mageDir
+		if replaceErr := retryReplace.Run(); replaceErr != nil {
+			return fmt.Errorf("mage verification: %w (replace fallback: %v)", err, replaceErr)
+		}
+		retryTidy := exec.Command(binGo, "mod", "tidy")
+		retryTidy.Dir = mageDir
+		if tidyErr := retryTidy.Run(); tidyErr != nil {
+			return fmt.Errorf("mage verification: %w (tidy fallback: %v)", err, tidyErr)
+		}
+		if err := verifyMage(targetDir); err != nil {
+			return fmt.Errorf("mage verification (after local replace): %w", err)
+		}
 	}
 
 	logf("scaffold: done")

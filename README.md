@@ -126,11 +126,10 @@ Use cases are stable by numeric ID. The release they belong to is recorded in [d
 pkg/orchestrator/      — library implementation; exported types are Orchestrator, Config, New, LoadConfig
 orchestrator.go        — Mage target template; scaffold:push copies this to target repos as magefiles/orchestrator.go
 magefiles/magefile.go  — build targets for this repository (includes scaffold:push, podman targets)
-magefiles/testing.go   — integration test targets (cobbler, generator, resume suites)
 docs/                  — VISION, ARCHITECTURE, PRDs, use cases, test suites, constitutions
-docs/constitutions/    — design/planning/execution/go-style constitutions (scaffolded into consuming projects)
+docs/constitutions/    — design/planning/execution/go-style/testing constitutions (scaffolded into consuming projects)
 docs/prompts/          — measure and stitch prompt templates (scaffolded into consuming projects)
-tests/e2e/             — end-to-end tests against a scaffolded target repository
+tests/rel01.0/         — release 01 E2E tests against a scaffolded target repository
 configuration.yaml     — orchestrator config (auto-created with defaults if missing)
 .claude/               — Claude Code skills and project rules
 ```
@@ -151,12 +150,22 @@ configuration.yaml     — orchestrator config (auto-created with defaults if mi
 # Unit tests (pkg/orchestrator)
 mage test:unit
 
-# E2E tests — scaffolds a target repo and runs non-Claude tests
-mage test:integration
+# All E2E tests
+mage test:e2e
 
-# Full E2E suite including Claude-gated tests (requires podman image and credentials)
-mage credentials        # extract Claude credentials from macOS Keychain
-mage test:generatorE2E  # runs full E2E suite including Claude
+# Single use case (see mage -l for all test:uc* targets)
+mage test:uc001OrchestratorInitialization
+mage test:uc003MeasureWorkflow
+
+# Full suite including Claude-gated tests (requires podman image and credentials)
+mage credentials  # extract Claude credentials from macOS Keychain
+mage test:e2e     # runs all E2E tests including Claude-gated ones
+
+# Run tests directly (do NOT use bare "go test" at the repo root —
+# the root package is a mage entrypoint and requires the mage toolchain)
+go test ./pkg/orchestrator/...                # unit tests
+go test ./tests/rel01.0/...                       # all E2E tests
+go test -run TestRel01_UC003 ./tests/rel01.0/...  # single use case
 
 # Scaffold a target repo for manual testing
 mage scaffold:push /path/to/target
@@ -167,7 +176,7 @@ mage lint
 mage install
 ```
 
-E2E tests download `github.com/petar-djukic/go-unix-utils`, scaffold it once in `TestMain`, and copy the snapshot per test. The scaffold round-trip test (`TestScaffold_PushPopRoundTrip`) creates an empty repository, scaffolds it, verifies all files, pops the scaffold, and verifies removal.
+E2E tests download `github.com/petar-djukic/go-unix-utils`, scaffold it once in `TestMain`, and copy the snapshot per test. Test names follow the `Test{Suite}_UC{NNN}_Name` convention (see [testing constitution](docs/constitutions/testing.yaml)), enabling filtering by suite or use case. Each use case has a corresponding mage target (`test:uc001OrchestratorInitialization` through `test:uc007BuildTooling`).
 
 ## License
 

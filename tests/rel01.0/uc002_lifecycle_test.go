@@ -159,7 +159,7 @@ func TestRel01_UC002_ResetReturnsToCleanMain(t *testing.T) {
 // TestRel01_UC002_Stitch100 runs a full generation with 100 stitch iterations.
 // This is a stress test — run it explicitly:
 //
-//	go test -v -count=1 -timeout 0 -run TestRel01_UC002_Stitch100 ./tests/e2e/...
+//	go test -v -count=1 -timeout 0 -run TestRel01_UC002_Stitch100 ./tests/rel01.0/...
 func TestRel01_UC002_Stitch100(t *testing.T) {
 	dir := setupRepo(t)
 	setupClaude(t, dir)

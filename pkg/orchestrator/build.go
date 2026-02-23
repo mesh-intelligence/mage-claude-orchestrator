@@ -58,48 +58,50 @@ func (o *Orchestrator) TestUnit() error {
 	return nil
 }
 
-// TestIntegration runs go test in the tests/ directory. If the
-// directory does not exist, the target prints a skip message.
-func (o *Orchestrator) TestIntegration() error {
-	if _, err := os.Stat("tests"); os.IsNotExist(err) {
-		fmt.Println("No integration test directory found")
+// TestE2E runs go test in the tests/rel01.0/ directory. If the directory
+// does not exist, the target prints a skip message.
+func (o *Orchestrator) TestE2E() error {
+	if _, err := os.Stat("tests/rel01.0"); os.IsNotExist(err) {
+		fmt.Println("No E2E test directory found (tests/rel01.0/)")
 		return nil
 	}
-	logf("test:integration: running go test ./tests/...")
-	cmd := exec.Command(binGo, "test", "./tests/...")
+	logf("test:e2e: running go test -v -count=1 ./tests/rel01.0/...")
+	cmd := exec.Command(binGo, "test", "-v", "-count=1", "-timeout", "1800s", "./tests/rel01.0/...")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("go test integration: %w", err)
+		return fmt.Errorf("go test e2e: %w", err)
 	}
-	logf("test:integration: done")
+	logf("test:e2e: done")
 	return nil
 }
 
-// TestAll runs unit and integration tests.
+// TestE2EByUseCase runs E2E tests matching a single use case. The uc
+// parameter is the zero-padded use case number (e.g., "001"). Tests
+// are selected via -run matching the Test.*_UC{uc} pattern.
+func (o *Orchestrator) TestE2EByUseCase(uc string) error {
+	if _, err := os.Stat("tests/rel01.0"); os.IsNotExist(err) {
+		fmt.Println("No E2E test directory found (tests/rel01.0/)")
+		return nil
+	}
+	pattern := fmt.Sprintf("Test.*_UC%s", uc)
+	logf("test:e2e: running go test -v -count=1 -run %s ./tests/rel01.0/...", pattern)
+	cmd := exec.Command(binGo, "test", "-v", "-count=1", "-run", pattern, "-timeout", "1800s", "./tests/rel01.0/...")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("go test e2e (UC%s): %w", uc, err)
+	}
+	logf("test:e2e: done")
+	return nil
+}
+
+// TestAll runs unit and E2E tests.
 func (o *Orchestrator) TestAll() error {
 	if err := o.TestUnit(); err != nil {
 		return err
 	}
-	return o.TestIntegration()
-}
-
-// TestGenerator runs the generator test suite in tests/e2e/ against real
-// target repositories. If the directory does not exist, the target prints
-// a skip message and returns nil.
-func (o *Orchestrator) TestGenerator() error {
-	if _, err := os.Stat("tests/e2e"); os.IsNotExist(err) {
-		fmt.Println("No E2E test directory found (tests/e2e/)")
-		return nil
-	}
-	logf("test:generator: running go test -v -timeout 1800s ./tests/e2e/...")
-	cmd := exec.Command(binGo, "test", "-v", "-timeout", "1800s", "./tests/e2e/...")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("generator tests failed: %w", err)
-	}
-	return nil
+	return o.TestE2E()
 }
 
 // Install runs go install for the main package. If MainPackage

@@ -223,8 +223,8 @@ coverage_gaps: |
   - Docker/image management (docker.go): BuildImage(), ensureImage(), embedded
     Dockerfile. Design decision 4 describes the rationale but no PRD specifies
     the build/ensure behavior.
-  - Build utilities (build.go): Build(), Lint(), TestUnit(), TestIntegration(),
-    TestAll(), Install(), Clean(), ExtractCredentials(). No PRD.
+  - Build utilities (build.go): Build(), Lint(), TestUnit(), TestE2E(),
+    TestE2EByUseCase(), TestAll(), Install(), Clean(), ExtractCredentials(). No PRD.
   - Phase-aware logging (orchestrator.go): setPhase/clearPhase, logf with
     [phase +elapsed]. No PRD.
 

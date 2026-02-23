@@ -263,4 +263,4 @@ references:
   - eng02-prompt-templates
   - prd003-cobbler-workflows
   - prd005-metrics-collection
-  - tests/e2e/cobbler_test.go (TestMeasure_TimingByLimit)
+  - tests/rel01.0/uc003_measure_test.go (TestRel01_UC003_TimingByLimit)

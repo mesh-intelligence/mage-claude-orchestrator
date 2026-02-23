@@ -20,7 +20,7 @@ import (
 // issue created by measure and executes it: the task is closed, code is
 // committed, and the task branch is cleaned up.
 //
-//	go test -v -count=1 -timeout 900s -run TestRel01_UC004_StitchExecutesTask ./tests/e2e/...
+//	go test -v -count=1 -timeout 900s -run TestRel01_UC004_StitchExecutesTask ./tests/rel01.0/...
 func TestRel01_UC004_StitchExecutesTask(t *testing.T) {
 	dir := setupRepo(t)
 	setupClaude(t, dir)
@@ -82,7 +82,7 @@ func TestRel01_UC004_StitchExecutesTask(t *testing.T) {
 // TestRel01_UC004_TimingByCycle runs alternating measure/stitch cycles and logs
 // the wall-clock time for each step.
 //
-//	go test -v -count=1 -timeout 0 -run TestRel01_UC004_TimingByCycle ./tests/e2e/...
+//	go test -v -count=1 -timeout 0 -run TestRel01_UC004_TimingByCycle ./tests/rel01.0/...
 func TestRel01_UC004_TimingByCycle(t *testing.T) {
 	dir := setupRepo(t)
 	setupClaude(t, dir)

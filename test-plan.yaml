@@ -187,14 +187,14 @@ test_cases:
       exit_code: 0
       stdout_contains: "no test files"
 
-  - name: test:integration skips when tests/ directory is missing
+  - name: test:e2e skips when tests/rel01.0/ directory is missing
     inputs:
       setup:
-        - rm -rf tests/
-      command: mage test:integration
+        - rm -rf tests/rel01.0/
+      command: mage test:e2e
     expected:
       exit_code: 0
-      stdout_contains: "No integration test directory found"
+      stdout_contains: "No E2E test directory found"
 
   - name: test:all succeeds with no test files
     inputs:
@@ -283,18 +283,14 @@ test_cases:
       state:
         bd_closed_issues_contain_title: "measure: plan on"
 
-  - name: test:cobbler runs the full cobbler regression suite
+  - name: test:uc003MeasureWorkflow runs UC003 E2E tests
     description: >
-      The mage test:cobbler target creates an orchestrator with
-      config overrides (max_measure_issues=3, silence=true), measures
-      3 issues, stitches them, and verifies all are closed with no
-      stale branches. This replaces the manual cobbler integration
-      test.
+      Runs the measure workflow E2E tests via go test -run Test.*_UC003.
+      Requires Claude for some tests.
     inputs:
-      command: mage test:cobbler
+      command: mage test:uc003MeasureWorkflow
     expected:
       exit_code: 0
-      stdout_contains: "Cobbler regression test PASSED"
 
   # ── 6. Generator lifecycle (no Claude) ──
 
@@ -348,19 +344,14 @@ test_cases:
 
   # ── 7. Generator run (requires Claude) ──
 
-  - name: test:generator runs the full generator lifecycle suite
+  - name: test:uc002GenerationLifecycle runs UC002 E2E tests
     description: >
-      The mage test:generator target runs three progressive tests:
-      (1) start/stop with no Claude, (2) start/run(1 cycle)/stop,
-      and (3) stitch respects per-cycle limit. Config overrides are
-      applied in Go code (silence=true, max_measure_issues=1,
-      max_stitch_issues_per_cycle=2, cycles=1).
-      This replaces the manual generator run tests.
+      Runs the generation lifecycle E2E tests via go test -run Test.*_UC002.
+      Covers start, stop, list, run, switch, and reset.
     inputs:
-      command: mage test:generator
+      command: mage test:uc002GenerationLifecycle
     expected:
       exit_code: 0
-      stdout_contains: "Generator lifecycle tests PASSED"
 
   - name: stitch per-cycle limit triggers measure between batches
     description: >
@@ -400,17 +391,14 @@ test_cases:
 
   # ── 8. Generator resume (requires Claude) ──
 
-  - name: test:resume runs the resume recovery test
+  - name: test:uc005ResumeRecovery runs UC005 E2E tests
     description: >
-      The mage test:resume target creates a generation, measures 1 issue,
-      switches to main (simulating an interruption), then calls resume.
-      Resume should switch back, clean up, and stitch the pending issue.
-      Config overrides are applied in Go code.
+      Runs the resume recovery E2E tests via go test -run Test.*_UC005.
+      Covers resume from interruption, stale branches, and orphaned issues.
     inputs:
-      command: mage test:resume
+      command: mage test:uc005ResumeRecovery
     expected:
       exit_code: 0
-      stdout_contains: "Generator resume test PASSED"
 
   - name: "resume auto-detects generation branch"
     description: >

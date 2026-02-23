@@ -42,6 +42,9 @@ type Stats mg.Namespace
 // Test groups the testing targets.
 type Test mg.Namespace
 
+// Benchmark groups the E2E benchmark targets.
+type Benchmark mg.Namespace
+
 // baseCfg holds the configuration loaded from configuration.yaml.
 var baseCfg orchestrator.Config
 
@@ -187,6 +190,11 @@ func (Test) Uc006ScaffoldOperations() error { return newOrch().TestE2EByUseCase(
 
 // Uc007BuildTooling runs UC007 E2E tests (build, install, clean, stats).
 func (Test) Uc007BuildTooling() error { return newOrch().TestE2EByUseCase("007") }
+
+// --- Benchmark targets ---
+
+// Uc008PerformanceBenchmarks runs UC008 benchmarks (measure and stitch timing).
+func (Benchmark) Uc008PerformanceBenchmarks() error { return newOrch().BenchmarkE2EByUseCase("008") }
 
 // --- Cobbler targets ---
 

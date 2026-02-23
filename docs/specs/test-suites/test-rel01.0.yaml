@@ -12,6 +12,7 @@ traces:
   - rel01.0-uc005-resume-recovery
   - rel01.0-uc006-scaffold-operations
   - rel01.0-uc007-build-tooling
+  - rel01.0-uc008-performance-benchmarks
 
 tags:
   - unit
@@ -338,16 +339,6 @@ test_cases:
       state:
         ready_issues: 0
 
-  - use_case: rel01.0-uc003-measure-workflow
-    name: Measure timing varies by issue limit
-    go_test: TestRel01_UC003_TimingByLimit
-    inputs:
-      command: mage cobbler:measure
-      config_overrides:
-        cobbler.max_measure_issues: 1..5
-    expected:
-      exit_code: 0
-
 # ---- uc004: Stitch workflow task execution ----
 
   - use_case: rel01.0-uc004-stitch-workflow
@@ -436,16 +427,6 @@ test_cases:
       state:
         invocation_record_has_diff: true
         invocation_record_has_loc: true
-
-  - use_case: rel01.0-uc004-stitch-workflow
-    name: Stitch timing varies by cycle count
-    go_test: TestRel01_UC004_TimingByCycle
-    inputs:
-      command: mage cobbler:stitch
-      config_overrides:
-        cobbler.max_stitch_issues_per_cycle: 1
-    expected:
-      exit_code: 0
 
 # ---- uc005: Generation resume and task recovery ----
 
@@ -638,6 +619,28 @@ test_cases:
     expected:
       exit_code: 0
       stdout_contains: "go_loc"
+
+# ---- uc008: Performance benchmarks ----
+
+  - use_case: rel01.0-uc008-performance-benchmarks
+    name: Measure timing varies by issue limit
+    go_test: BenchmarkRel01_UC008_MeasureTimingByLimit
+    inputs:
+      command: go test -bench BenchmarkRel01_UC008_MeasureTimingByLimit -benchtime 1x
+      config_overrides:
+        cobbler.max_measure_issues: 1..5
+    expected:
+      exit_code: 0
+
+  - use_case: rel01.0-uc008-performance-benchmarks
+    name: Stitch timing varies by cycle count
+    go_test: BenchmarkRel01_UC008_StitchTimingByCycle
+    inputs:
+      command: go test -bench BenchmarkRel01_UC008_StitchTimingByCycle -benchtime 1x
+      config_overrides:
+        cobbler.max_stitch_issues_per_cycle: 1
+    expected:
+      exit_code: 0
 
 cleanup:
   - Switch to main branch

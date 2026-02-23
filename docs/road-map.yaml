@@ -26,6 +26,9 @@ releases:
       - id: rel01.0-uc005-resume-recovery
         summary: Generation resume with stale task recovery
         status: done
+      - id: rel01.0-uc008-performance-benchmarks
+        summary: Wall-clock benchmarks for measure and stitch workflows
+        status: done
 
   - version: "02.0"
     name: VS Code Extension

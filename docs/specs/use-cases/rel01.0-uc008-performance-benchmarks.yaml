@@ -1,0 +1,34 @@
+id: rel01.0-uc008-performance-benchmarks
+title: Performance Benchmarks
+
+summary: |
+  Benchmarks measure wall-clock time and resource usage for the
+  measure and stitch workflows under varying configuration limits.
+  They share test infrastructure with the functional E2E tests but
+  assert timing characteristics rather than correctness. Results
+  feed into capacity planning and regression detection.
+
+actor: Developer (via mage benchmark:*)
+
+trigger: Running mage benchmark:uc008PerformanceBenchmarks
+
+flow:
+  - F1: "Scaffold and initialize a test repository from the shared snapshot"
+  - F2: "Configure limits (max_measure_issues, max_stitch_issues_per_cycle)"
+  - F3: "Run measure or stitch across a range of limit values"
+  - F4: "Record wall-clock time and issue counts per sub-benchmark"
+  - F5: "Report metrics via testing.B (ns/op, custom metrics)"
+
+touchpoints:
+  - T1: "Measure workflow: prd003-cobbler-workflows R1, R2, R6"
+  - T2: "Stitch workflow: prd003-cobbler-workflows R3, R4, R6"
+  - T3: "Config limits: prd001-orchestrator-core R1"
+
+success_criteria:
+  - S1: Benchmarks complete without error for each limit value
+  - S2: Wall-clock time and issue counts are reported per sub-benchmark
+  - S3: Benchmarks are isolated from functional tests (run via separate mage target)
+
+out_of_scope:
+  - Functional correctness of measure or stitch (covered by UC003, UC004)
+  - Claude output quality

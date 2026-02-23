@@ -6,7 +6,6 @@
 package e2e_test
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -68,49 +67,6 @@ func TestRel01_UC003_BeadsResetClearsAfterMeasure(t *testing.T) {
 
 	if n := countReadyIssues(t, dir); n != 0 {
 		t.Errorf("expected 0 ready issues after beads:reset, got %d", n)
-	}
-}
-
-// BenchmarkRel01_UC003_TimingByLimit runs measure with limits 1 through 5 and
-// reports wall-clock time and issue count for each.
-//
-//	go test -tags e2e -bench BenchmarkRel01_UC003_TimingByLimit -benchtime 1x -timeout 0 ./tests/rel01.0/...
-func BenchmarkRel01_UC003_TimingByLimit(b *testing.B) {
-	dir := setupRepo(b)
-	setupClaude(b, dir)
-
-	if err := runMage(b, dir, "reset"); err != nil {
-		b.Fatalf("reset: %v", err)
-	}
-	if err := runMage(b, dir, "init"); err != nil {
-		b.Fatalf("init: %v", err)
-	}
-
-	for limit := 1; limit <= 5; limit++ {
-		b.Run(fmt.Sprintf("limit_%d", limit), func(b *testing.B) {
-			b.StopTimer()
-			if err := runMage(b, dir, "beads:reset"); err != nil {
-				b.Fatalf("beads:reset: %v", err)
-			}
-			if err := runMage(b, dir, "init"); err != nil {
-				b.Fatalf("init: %v", err)
-			}
-
-			writeConfigOverride(b, dir, func(cfg *orchestrator.Config) {
-				cfg.Cobbler.MaxMeasureIssues = limit
-			})
-			b.StartTimer()
-
-			for range b.N {
-				if err := runMage(b, dir, "cobbler:measure"); err != nil {
-					b.Fatalf("cobbler:measure (limit=%d): %v", limit, err)
-				}
-			}
-
-			b.StopTimer()
-			n := countReadyIssues(b, dir)
-			b.ReportMetric(float64(n), "issues")
-		})
 	}
 }
 

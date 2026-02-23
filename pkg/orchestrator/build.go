@@ -96,6 +96,28 @@ func (o *Orchestrator) TestE2EByUseCase(uc string) error {
 	return nil
 }
 
+// BenchmarkE2EByUseCase runs E2E benchmarks matching a single use case.
+// The uc parameter is the zero-padded use case number (e.g., "003").
+// Benchmarks are selected via -bench matching the Benchmark.*_UC{uc}
+// pattern. Regular tests are skipped via -run=^$.
+func (o *Orchestrator) BenchmarkE2EByUseCase(uc string) error {
+	if _, err := os.Stat("tests/rel01.0"); os.IsNotExist(err) {
+		fmt.Println("No E2E test directory found (tests/rel01.0/)")
+		return nil
+	}
+	pattern := fmt.Sprintf("Benchmark.*_UC%s", uc)
+	logf("benchmark: running go test -bench %s -benchtime 1x -tags=e2e -run ^$ ./tests/rel01.0/...", pattern)
+	cmd := exec.Command(binGo, "test", "-bench", pattern, "-benchtime", "1x",
+		"-tags=e2e", "-run", "^$", "-timeout", "0", "-v", "./tests/rel01.0/...")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("go test -bench (UC%s): %w", uc, err)
+	}
+	logf("benchmark: done")
+	return nil
+}
+
 // TestAll runs unit and E2E tests.
 func (o *Orchestrator) TestAll() error {
 	if err := o.TestUnit(); err != nil {

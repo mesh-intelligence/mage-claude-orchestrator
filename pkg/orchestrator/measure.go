@@ -348,7 +348,7 @@ func countJSONArray(jsonStr string) int {
 }
 
 func (o *Orchestrator) buildMeasurePrompt(userInput, existingIssues string, limit int, outputPath string) (string, error) {
-	def, err := parsePromptDef(orDefault(o.cfg.Cobbler.MeasurePrompt, defaultMeasurePrompt))
+	tmpl, err := parsePromptTemplate(orDefault(o.cfg.Cobbler.MeasurePrompt, defaultMeasurePrompt))
 	if err != nil {
 		return "", fmt.Errorf("measure prompt YAML: %w", err)
 	}
@@ -358,22 +358,34 @@ func (o *Orchestrator) buildMeasurePrompt(userInput, existingIssues string, limi
 	projectCtx, ctxErr := buildProjectContext(existingIssues, o.cfg.Project.GoSourceDirs)
 	if ctxErr != nil {
 		logf("buildMeasurePrompt: buildProjectContext error: %v", ctxErr)
-		projectCtx = "# Error building project context\n"
+		projectCtx = &ProjectContext{}
 	}
 
-	data := map[string]string{
-		"project_context":       projectCtx,
-		"planning_constitution": planningConst,
-		"output_path":           outputPath,
-		"limit":                 fmt.Sprintf("%d", limit),
-		"lines_min":             fmt.Sprintf("%d", o.cfg.Cobbler.EstimatedLinesMin),
-		"lines_max":             fmt.Sprintf("%d", o.cfg.Cobbler.EstimatedLinesMax),
-		"user_input":            userInput,
+	placeholders := map[string]string{
+		"output_path": outputPath,
+		"limit":       fmt.Sprintf("%d", limit),
+		"lines_min":   fmt.Sprintf("%d", o.cfg.Cobbler.EstimatedLinesMin),
+		"lines_max":   fmt.Sprintf("%d", o.cfg.Cobbler.EstimatedLinesMax),
 	}
 
-	logf("buildMeasurePrompt: projectCtx=%d bytes limit=%d userInput=%v",
-		len(projectCtx), limit, userInput != "")
-	return renderPrompt(def, data), nil
+	doc := MeasurePromptDoc{
+		Role:                 tmpl.Role,
+		ProjectContext:       projectCtx,
+		PlanningConstitution: parseYAMLNode(planningConst),
+		Task:                 substitutePlaceholders(tmpl.Task, placeholders),
+		Constraints:          substitutePlaceholders(tmpl.Constraints, placeholders),
+		OutputFormat:         substitutePlaceholders(tmpl.OutputFormat, placeholders),
+		AdditionalContext:    userInput,
+	}
+
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return "", fmt.Errorf("marshaling measure prompt: %w", err)
+	}
+
+	logf("buildMeasurePrompt: %d bytes limit=%d userInput=%v",
+		len(out), limit, userInput != "")
+	return string(out), nil
 }
 
 type proposedIssue struct {

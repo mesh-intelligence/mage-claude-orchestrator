@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed prompts/stitch.yaml
@@ -429,7 +431,7 @@ func createWorktree(task stitchTask) error {
 }
 
 func (o *Orchestrator) buildStitchPrompt(task stitchTask) (string, error) {
-	def, err := parsePromptDef(orDefault(o.cfg.Cobbler.StitchPrompt, defaultStitchPrompt))
+	tmpl, err := parsePromptTemplate(orDefault(o.cfg.Cobbler.StitchPrompt, defaultStitchPrompt))
 	if err != nil {
 		return "", fmt.Errorf("stitch prompt YAML: %w", err)
 	}
@@ -439,7 +441,7 @@ func (o *Orchestrator) buildStitchPrompt(task stitchTask) (string, error) {
 
 	// Build project context from the worktree directory so source code
 	// reflects the latest state after prior stitches have been merged.
-	var projectCtx string
+	var projectCtx *ProjectContext
 	if task.worktreeDir != "" {
 		orig, err := os.Getwd()
 		if err != nil {
@@ -458,18 +460,29 @@ func (o *Orchestrator) buildStitchPrompt(task stitchTask) (string, error) {
 			}
 		}
 	}
-	logf("buildStitchPrompt: projectCtx=%d bytes", len(projectCtx))
+	logf("buildStitchPrompt: projectCtx=%v", projectCtx != nil)
 
-	data := map[string]string{
-		"id":                     task.id,
-		"issue_type":             task.issueType,
-		"title":                  task.title,
-		"description":            task.description,
-		"project_context":        projectCtx,
-		"execution_constitution": executionConst,
-		"go_style_constitution":  goStyleConst,
+	taskContext := fmt.Sprintf("Task ID: %s\nType: %s\nTitle: %s",
+		task.id, task.issueType, task.title)
+
+	doc := StitchPromptDoc{
+		Role:                  tmpl.Role,
+		ProjectContext:        projectCtx,
+		Context:               taskContext,
+		ExecutionConstitution: parseYAMLNode(executionConst),
+		GoStyleConstitution:   parseYAMLNode(goStyleConst),
+		Task:                  tmpl.Task,
+		Constraints:           tmpl.Constraints,
+		Description:           task.description,
 	}
-	return renderPrompt(def, data), nil
+
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return "", fmt.Errorf("marshaling stitch prompt: %w", err)
+	}
+
+	logf("buildStitchPrompt: %d bytes", len(out))
+	return string(out), nil
 }
 
 func mergeBranch(branchName, baseBranch, repoRoot string) error {

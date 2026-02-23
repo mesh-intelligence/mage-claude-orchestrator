@@ -589,9 +589,8 @@ func loadSourceFiles(dirs []string) []SourceFile {
 // ---------------------------------------------------------------------------
 
 // buildProjectContext reads all docs/ files and source code, parses
-// existing issues, and assembles them into a single YAML document for
-// prompt injection.
-func buildProjectContext(existingIssuesJSON string, goSourceDirs []string) (string, error) {
+// existing issues, and assembles them into a ProjectContext struct.
+func buildProjectContext(existingIssuesJSON string, goSourceDirs []string) (*ProjectContext, error) {
 	ctx := &ProjectContext{}
 
 	ctx.Vision = loadYAML[VisionDoc]("docs/VISION.yaml")
@@ -630,13 +629,7 @@ func buildProjectContext(existingIssuesJSON string, goSourceDirs []string) (stri
 	ctx.SourceCode = loadSourceFiles(goSourceDirs)
 	ctx.Issues = parseIssuesJSON(existingIssuesJSON)
 
-	out, err := yaml.Marshal(ctx)
-	if err != nil {
-		logf("buildProjectContext: marshal error: %v", err)
-		return "", err
-	}
-	logf("buildProjectContext: %d bytes, vision=%v arch=%v roadmap=%v specs=%v eng=%d const=%v issues=%d extra=%d src=%d",
-		len(out),
+	logf("buildProjectContext: vision=%v arch=%v roadmap=%v specs=%v eng=%d const=%v issues=%d extra=%d src=%d",
 		ctx.Vision != nil,
 		ctx.Architecture != nil,
 		ctx.Roadmap != nil,
@@ -647,5 +640,5 @@ func buildProjectContext(existingIssuesJSON string, goSourceDirs []string) (stri
 		len(ctx.Extra),
 		len(ctx.SourceCode),
 	)
-	return string(out), nil
+	return ctx, nil
 }

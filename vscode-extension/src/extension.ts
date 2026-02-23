@@ -9,6 +9,7 @@ import * as commands from "./commands";
 import { SpecBrowserProvider } from "./specBrowser";
 import { SpecGraph } from "./specModel";
 import { TraceabilityProvider, viewRequirement } from "./traceability";
+import { GenerationBrowserProvider } from "./generationBrowser";
 
 /** Output channel for error and diagnostic logging. */
 let outputChannel: vscode.OutputChannel;
@@ -85,6 +86,18 @@ export function activate(context: vscode.ExtensionContext): void {
     configWatcher.onDidChange(() =>
       outputChannel.appendLine("configuration.yaml changed")
     );
+
+    // Generation Browser tree view (prd006 R2).
+    const genBrowser = new GenerationBrowserProvider(root);
+    context.subscriptions.push(
+      vscode.window.registerTreeDataProvider(
+        "mageOrchestrator.status",
+        genBrowser
+      )
+    );
+    gitRefsWatcher.onDidChange(() => genBrowser.refresh());
+    gitRefsWatcher.onDidCreate(() => genBrowser.refresh());
+    gitRefsWatcher.onDidDelete(() => genBrowser.refresh());
 
     // Specification Browser tree view (prd006 R8).
     const specBrowser = new SpecBrowserProvider(root);

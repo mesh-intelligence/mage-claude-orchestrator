@@ -67,6 +67,15 @@
         }
       ]
     },
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "mageOrchestrator.switch",
+          "when": "view == mageOrchestrator.status && viewItem == generation",
+          "group": "navigation"
+        }
+      ]
+    },
     "views": {
       "mage-orchestrator": [
         {

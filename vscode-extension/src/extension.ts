@@ -7,6 +7,8 @@
 import * as vscode from "vscode";
 import * as commands from "./commands";
 import { SpecBrowserProvider } from "./specBrowser";
+import { SpecGraph } from "./specModel";
+import { TraceabilityProvider, viewRequirement } from "./traceability";
 
 /** Output channel for error and diagnostic logging. */
 let outputChannel: vscode.OutputChannel;
@@ -100,6 +102,24 @@ export function activate(context: vscode.ExtensionContext): void {
     specsWatcher.onDidChange(() => specBrowser.refresh());
     specsWatcher.onDidCreate(() => specBrowser.refresh());
     specsWatcher.onDidDelete(() => specBrowser.refresh());
+
+    // Code-to-spec traceability CodeLens (prd006 R9).
+    const traceGraph = new SpecGraph(root);
+    context.subscriptions.push(
+      vscode.languages.registerCodeLensProvider(
+        { language: "go", scheme: "file" },
+        new TraceabilityProvider()
+      )
+    );
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        "mageOrchestrator.viewRequirement",
+        (id: string) => viewRequirement(traceGraph, id)
+      )
+    );
+    specsWatcher.onDidChange(() => traceGraph.invalidate());
+    specsWatcher.onDidCreate(() => traceGraph.invalidate());
+    specsWatcher.onDidDelete(() => traceGraph.invalidate());
   }
 
   outputChannel.appendLine("Mage Orchestrator extension activated");

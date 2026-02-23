@@ -16,6 +16,7 @@ goals:
   - G4: Allow lifecycle management (start, run, resume, stop, reset, switch) without leaving VS Code
   - G5: Navigate specification artifacts (use cases, PRDs, test suites) and their relationships from a tree view
   - G6: Trace from source code annotations back to the specification YAML they reference
+  - G7: Build, package, install, and uninstall the extension via mage targets without manual npm or vsce invocations
 
 requirements:
   R1:
@@ -113,6 +114,15 @@ requirements:
       - R9.4: Each detected tag must render a View Requirement CodeLens above the comment line
       - R9.5: Activating the CodeLens must open the referenced specification YAML file in the editor, resolved from docs/specs/ using the prd-id or uc-id
 
+  R10:
+    title: Extension Build and Installation
+    items:
+      - R10.1: mage vscode:push must compile TypeScript, package the result as a .vsix archive, and install the extension into VS Code using the code CLI
+      - R10.2: vscode:push must run npm install in the extension directory before compiling to ensure all dependencies are present
+      - R10.3: vscode:push must verify that required tools (npm, code CLI) are available on PATH before proceeding, and abort with a clear error if any tool is missing
+      - R10.4: mage vscode:pop must uninstall the extension from VS Code using the code CLI and report success or failure
+      - R10.5: vscode:push must log each step (dependency install, compile, package, install) using the orchestrator logging pattern so progress is visible in the terminal
+
 non_goals:
   - This PRD does not define a general-purpose extension reusable by consuming projects
   - This PRD does not replace the mage CLI as the primary interface
@@ -135,6 +145,9 @@ acceptance_criteria:
   - Specification browser lists use cases, PRDs, and test suites from docs/specs/ with expandable nodes showing touchpoints and implementing source files
   - Clicking a spec node opens the YAML file; clicking a source node opens the Go file
   - "CodeLens appears above // prd: and // uc: comments in Go files, linking to the referenced specification YAML"
+  - mage vscode:push compiles TypeScript, packages a .vsix, and installs the extension into VS Code in a single invocation
+  - mage vscode:push aborts with a clear error when npm or the code CLI is not found on PATH
+  - mage vscode:pop uninstalls the extension from VS Code and reports the outcome
 
 references:
   - prd001-orchestrator-core

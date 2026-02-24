@@ -424,6 +424,18 @@ func stripParenthetical(s string) string {
 	return s
 }
 
+// sourceFileMatchesAny returns true if the source file's path ends with
+// any of the given suffixes. Used by both filterSourceFiles and
+// applyContextBudget for consistent suffix matching.
+func sourceFileMatchesAny(sf SourceFile, suffixes []string) bool {
+	for _, s := range suffixes {
+		if strings.HasSuffix(sf.File, s) {
+			return true
+		}
+	}
+	return false
+}
+
 // filterSourceFiles returns only the source files whose paths match any of
 // the requiredPaths using suffix matching. A required path matches if any
 // SourceFile.File ends with it. If requiredPaths is empty, all source files
@@ -435,11 +447,8 @@ func filterSourceFiles(sources []SourceFile, requiredPaths []string) []SourceFil
 
 	var filtered []SourceFile
 	for _, src := range sources {
-		for _, req := range requiredPaths {
-			if strings.HasSuffix(src.File, req) {
-				filtered = append(filtered, src)
-				break
-			}
+		if sourceFileMatchesAny(src, requiredPaths) {
+			filtered = append(filtered, src)
 		}
 	}
 	return filtered
@@ -453,20 +462,6 @@ func filterSourceFiles(sources []SourceFile, requiredPaths []string) []SourceFil
 func applyContextBudget(ctx *ProjectContext, budget int, requiredPaths []string) {
 	if budget <= 0 || ctx == nil {
 		return
-	}
-
-	requiredSet := make(map[string]bool, len(requiredPaths))
-	for _, rp := range requiredPaths {
-		requiredSet[rp] = true
-	}
-
-	isRequired := func(sf SourceFile) bool {
-		for req := range requiredSet {
-			if strings.HasSuffix(sf.File, req) {
-				return true
-			}
-		}
-		return false
 	}
 
 	data, err := yaml.Marshal(ctx)
@@ -485,7 +480,7 @@ func applyContextBudget(ctx *ProjectContext, budget int, requiredPaths []string)
 		// Find the last non-required source file.
 		idx := -1
 		for i := len(ctx.SourceCode) - 1; i >= 0; i-- {
-			if !isRequired(ctx.SourceCode[i]) {
+			if !sourceFileMatchesAny(ctx.SourceCode[i], requiredPaths) {
 				idx = i
 				break
 			}

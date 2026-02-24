@@ -10,6 +10,7 @@
 package e2e_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -196,7 +197,7 @@ func numberedLines(content string) string {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		result = append(result, strings.Repeat(" ", 0)+string(rune('0'+i+1))+" | "+line)
+		result = append(result, fmt.Sprintf("%d | %s", i+1, line))
 	}
 	return strings.Join(result, "\n")
 }

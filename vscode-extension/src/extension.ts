@@ -10,6 +10,8 @@ import { SpecBrowserProvider } from "./specBrowser";
 import { SpecGraph } from "./specModel";
 import { TraceabilityProvider, viewRequirement } from "./traceability";
 import { GenerationBrowserProvider } from "./generationBrowser";
+import { BeadsStore } from "./beadsModel";
+import { IssueBrowserProvider } from "./issuesBrowser";
 
 /** Output channel for error and diagnostic logging. */
 let outputChannel: vscode.OutputChannel;
@@ -115,6 +117,19 @@ export function activate(context: vscode.ExtensionContext): void {
     specsWatcher.onDidChange(() => specBrowser.refresh());
     specsWatcher.onDidCreate(() => specBrowser.refresh());
     specsWatcher.onDidDelete(() => specBrowser.refresh());
+
+    // Issue tracker tree view (prd006 R4).
+    const beadsStore = new BeadsStore(root);
+    const issueBrowser = new IssueBrowserProvider(beadsStore);
+    context.subscriptions.push(
+      vscode.window.registerTreeDataProvider(
+        "mageOrchestrator.issues",
+        issueBrowser
+      )
+    );
+    beadsWatcher.onDidChange(() => issueBrowser.refresh());
+    beadsWatcher.onDidCreate(() => issueBrowser.refresh());
+    beadsWatcher.onDidDelete(() => issueBrowser.refresh());
 
     // Code-to-spec traceability CodeLens (prd006 R9).
     const traceGraph = new SpecGraph(root);

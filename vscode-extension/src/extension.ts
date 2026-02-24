@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Petar Djukic. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-// prd: prd006-vscode-extension R1, R5, R7
+// prd: prd006-vscode-extension R1, R3, R5, R7
 // uc: rel02.0-uc001-lifecycle-commands
+// uc: rel02.0-uc003-branch-comparison
 
 import * as vscode from "vscode";
 import * as commands from "./commands";
@@ -13,6 +14,10 @@ import { GenerationBrowserProvider } from "./generationBrowser";
 import { BeadsStore } from "./beadsModel";
 import { IssueBrowserProvider } from "./issuesBrowser";
 import { MetricsDashboard } from "./dashboard";
+import {
+  ComparisonBrowserProvider,
+  GitRefContentProvider,
+} from "./comparisonBrowser";
 
 /** Output channel for error and diagnostic logging. */
 let outputChannel: vscode.OutputChannel;
@@ -92,6 +97,66 @@ export function activate(context: vscode.ExtensionContext): void {
     gitRefsWatcher.onDidChange(() => genBrowser.refresh());
     gitRefsWatcher.onDidCreate(() => genBrowser.refresh());
     gitRefsWatcher.onDidDelete(() => genBrowser.refresh());
+
+    // Branch and Tag Comparison view (prd006 R3).
+    const comparisonBrowser = new ComparisonBrowserProvider(root);
+    context.subscriptions.push(
+      vscode.window.registerTreeDataProvider(
+        "mageOrchestrator.comparison",
+        comparisonBrowser
+      )
+    );
+    context.subscriptions.push(
+      vscode.workspace.registerTextDocumentContentProvider(
+        "mage-git-ref",
+        new GitRefContentProvider(root)
+      )
+    );
+    context.subscriptions.push(
+      vscode.commands.registerCommand("mageOrchestrator.compareTags", () =>
+        commands.compareTags(outputChannel, comparisonBrowser)
+      ),
+      vscode.commands.registerCommand(
+        "mageOrchestrator.compareGenerations",
+        (genA: string, genB: string) =>
+          commands.compareGenerations(
+            outputChannel,
+            comparisonBrowser,
+            genA,
+            genB
+          )
+      ),
+      vscode.commands.registerCommand(
+        "mageOrchestrator.openComparisonDiff",
+        (node) => commands.openComparisonDiff(node)
+      ),
+      vscode.commands.registerCommand(
+        "mageOrchestrator.selectForCompare",
+        async (item: { generation: { name: string } }) => {
+          // Store first generation; on second selection, trigger comparison.
+          const name = item.generation.name;
+          const stored =
+            context.workspaceState.get<string>("compareGenerationA");
+          if (stored && stored !== name) {
+            await commands.compareGenerations(
+              outputChannel,
+              comparisonBrowser,
+              stored,
+              name
+            );
+            await context.workspaceState.update(
+              "compareGenerationA",
+              undefined
+            );
+          } else {
+            await context.workspaceState.update("compareGenerationA", name);
+            vscode.window.showInformationMessage(
+              `Selected ${name} for comparison. Select a second generation to compare.`
+            );
+          }
+        }
+      )
+    );
 
     // Specification Browser tree view (prd006 R8).
     const specBrowser = new SpecBrowserProvider(root);

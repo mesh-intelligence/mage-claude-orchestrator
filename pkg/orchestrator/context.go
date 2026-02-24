@@ -411,6 +411,41 @@ type NamedDoc struct {
 }
 
 // ---------------------------------------------------------------------------
+// Source file filtering (selective stitch context, eng05 rec D)
+// ---------------------------------------------------------------------------
+
+// stripParenthetical removes a trailing parenthetical note from a path.
+// "pkg/types/cupboard.go (CrumbTable interface)" becomes "pkg/types/cupboard.go".
+func stripParenthetical(s string) string {
+	s = strings.TrimSpace(s)
+	if idx := strings.LastIndex(s, "("); idx > 0 {
+		return strings.TrimSpace(s[:idx])
+	}
+	return s
+}
+
+// filterSourceFiles returns only the source files whose paths match any of
+// the requiredPaths using suffix matching. A required path matches if any
+// SourceFile.File ends with it. If requiredPaths is empty, all source files
+// are returned (backward-compatible fallback).
+func filterSourceFiles(sources []SourceFile, requiredPaths []string) []SourceFile {
+	if len(requiredPaths) == 0 {
+		return sources
+	}
+
+	var filtered []SourceFile
+	for _, src := range sources {
+		for _, req := range requiredPaths {
+			if strings.HasSuffix(src.File, req) {
+				filtered = append(filtered, src)
+				break
+			}
+		}
+	}
+	return filtered
+}
+
+// ---------------------------------------------------------------------------
 // Helper functions
 // ---------------------------------------------------------------------------
 

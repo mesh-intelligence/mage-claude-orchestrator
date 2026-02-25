@@ -6,6 +6,11 @@ title: Release 02.0 test suite
 release: rel02.0
 traces:
   - rel02.0-uc001-lifecycle-commands
+  - rel02.0-uc002-generation-browser
+  - rel02.0-uc003-branch-comparison
+  - rel02.0-uc004-issue-tracker-view
+  - rel02.0-uc005-metrics-dashboard
+  - rel02.0-uc006-specification-browser
 
 tags:
   - vscode
@@ -140,6 +145,261 @@ test_cases:
       commands_enabled: false
       error_logged: "configuration.yaml not found in workspace"
 
+  # ---- uc002: Generation browser tree view ----
+
+  - use_case: rel02.0-uc002-generation-browser
+    name: Tree lists all generations from git tags
+    inputs:
+      git_tags:
+        - "generation-2026-02-19-10-00-00-start"
+        - "generation-2026-02-19-10-00-00-finished"
+        - "generation-2026-02-19-10-00-00-merged"
+        - "generation-2026-02-18-14-30-00-start"
+    expected:
+      tree_nodes:
+        - label: "generation-2026-02-19-10-00-00"
+          state: merged
+        - label: "generation-2026-02-18-14-30-00"
+          state: started
+
+  - use_case: rel02.0-uc002-generation-browser
+    name: Current generation is visually highlighted
+    inputs:
+      git_tags:
+        - "generation-2026-02-19-10-00-00-start"
+      current_branch: "generation-2026-02-19-10-00-00"
+    expected:
+      highlighted_node: "generation-2026-02-19-10-00-00"
+      icon_style: "current"
+
+  - use_case: rel02.0-uc002-generation-browser
+    name: Version tag displayed on generation node
+    inputs:
+      git_tags:
+        - "generation-2026-02-19-10-00-00-start"
+        - "generation-2026-02-19-10-00-00-merged"
+        - "v01.0.20260219.1"
+    expected:
+      generation_node:
+        label: "generation-2026-02-19-10-00-00"
+        version_tag: "v01.0.20260219.1"
+
+  - use_case: rel02.0-uc002-generation-browser
+    name: Tree refreshes on git ref change
+    inputs:
+      action: "Create new git tag generation-2026-02-20-09-00-00-start"
+      watcher_fires: true
+    expected:
+      tree_refreshed: true
+      new_node_visible: "generation-2026-02-20-09-00-00"
+
+  # ---- uc003: Branch and tag comparison ----
+
+  - use_case: rel02.0-uc003-branch-comparison
+    name: Compare two version tags shows file summary
+    inputs:
+      command: "Mage Orchestrator: Compare Tags"
+      tag_a: "v01.0.20260219.1"
+      tag_b: "v01.0.20260220.1"
+      git_diff_output:
+        - { status: "M", path: "pkg/orchestrator/measure.go" }
+        - { status: "A", path: "pkg/orchestrator/context.go" }
+        - { status: "D", path: "pkg/orchestrator/old_file.go" }
+    expected:
+      tree_nodes:
+        - label: "pkg/orchestrator/"
+          children:
+            - { label: "measure.go", status: modified }
+            - { label: "context.go", status: added }
+            - { label: "old_file.go", status: deleted }
+
+  - use_case: rel02.0-uc003-branch-comparison
+    name: Click file opens diff editor
+    inputs:
+      selected_file: "pkg/orchestrator/measure.go"
+      ref_a: "v01.0.20260219.1"
+      ref_b: "v01.0.20260220.1"
+    expected:
+      diff_editor_opened: true
+      left_ref: "v01.0.20260219.1"
+      right_ref: "v01.0.20260220.1"
+
+  - use_case: rel02.0-uc003-branch-comparison
+    name: Compare two generations resolves branch refs
+    inputs:
+      command: "Mage Orchestrator: Compare Generations"
+      generation_a: "generation-2026-02-19-10-00-00"
+      generation_b: "generation-2026-02-20-09-00-00"
+    expected:
+      ref_a_resolved: "generation-2026-02-19-10-00-00"
+      ref_b_resolved: "generation-2026-02-20-09-00-00"
+      tree_populated: true
+
+  - use_case: rel02.0-uc003-branch-comparison
+    name: Empty diff shows informational message
+    inputs:
+      tag_a: "v01.0.20260219.1"
+      tag_b: "v01.0.20260219.1"
+    expected:
+      tree_empty: true
+      message_shown: "No differences between the selected refs"
+
+  # ---- uc004: Issue tracker tree view ----
+
+  - use_case: rel02.0-uc004-issue-tracker-view
+    name: Issues grouped by status
+    inputs:
+      issues:
+        - { id: "task-1", title: "Implement feature A", status: "open", type: "task" }
+        - { id: "task-2", title: "Fix bug B", status: "in_progress", type: "task" }
+        - { id: "task-3", title: "Add tests for C", status: "closed", type: "task" }
+    expected:
+      groups:
+        - { label: "Open", count: 1 }
+        - { label: "In Progress", count: 1 }
+        - { label: "Closed", count: 1 }
+
+  - use_case: rel02.0-uc004-issue-tracker-view
+    name: Issue node displays title type and ID
+    inputs:
+      issue:
+        id: "mage-abc.1"
+        title: "Implement feature A"
+        type: "task"
+        status: "open"
+    expected:
+      node_label: "Implement feature A"
+      node_description: "task mage-abc.1"
+
+  - use_case: rel02.0-uc004-issue-tracker-view
+    name: InvocationRecord displayed as formatted child
+    inputs:
+      issue:
+        id: "mage-abc.1"
+        comments:
+          - body: '{"caller":"stitch","started_at":"2026-02-19T10:00:00Z","duration_s":120,"input_tokens":50000,"output_tokens":10000,"cost_usd":0.45,"loc_before":{"production":500,"test":100},"loc_after":{"production":600,"test":150},"diff":{"files":3,"insertions":120,"deletions":20}}'
+    expected:
+      child_nodes:
+        - "stitch | 2m | 50,000 in / 10,000 out | $0.45"
+        - "LOC: 500→600 prod, 100→150 test"
+        - "Diff: 3F +120 -20"
+
+  - use_case: rel02.0-uc004-issue-tracker-view
+    name: Tree handles missing beads directory
+    inputs:
+      beads_dir_exists: false
+    expected:
+      tree_empty: true
+      no_error: true
+
+  # ---- uc005: Metrics dashboard ----
+
+  - use_case: rel02.0-uc005-metrics-dashboard
+    name: Dashboard shows aggregated token summary
+    inputs:
+      invocation_records:
+        - { tokens: 60000, input_tokens: 50000, output_tokens: 10000, cost_usd: 0.45, duration_s: 120 }
+        - { tokens: 80000, input_tokens: 65000, output_tokens: 15000, cost_usd: 0.62, duration_s: 180 }
+    expected:
+      summary:
+        invocations: 2
+        total_tokens: 140000
+        total_input_tokens: 115000
+        total_output_tokens: 25000
+        total_cost_usd: 1.07
+        total_duration: "5m"
+
+  - use_case: rel02.0-uc005-metrics-dashboard
+    name: Dashboard shows per-invocation detail rows
+    inputs:
+      invocation_records:
+        - { caller: "stitch", started_at: "2026-02-19T10:00:00Z", tokens: 60000, input_tokens: 50000, output_tokens: 10000, duration_s: 120, diff: { files: 3, insertions: 100, deletions: 20 } }
+    expected:
+      detail_row:
+        caller: "stitch"
+        duration: "2m"
+        input: "50,000"
+        output: "10,000"
+        total: "60,000"
+        diff: "3F +100 -20"
+
+  - use_case: rel02.0-uc005-metrics-dashboard
+    name: Dashboard shows empty state when no records
+    inputs:
+      invocation_records: []
+    expected:
+      empty_message: "No invocation records found"
+      tables_visible: false
+
+  - use_case: rel02.0-uc005-metrics-dashboard
+    name: Dashboard shows diff statistics in summary
+    inputs:
+      invocation_records:
+        - { tokens: 60000, diff: { files: 3, insertions: 100, deletions: 20 } }
+        - { tokens: 40000, diff: { files: 5, insertions: 200, deletions: 50 } }
+    expected:
+      summary:
+        total_files: 8
+        total_insertions: 300
+        total_deletions: 70
+
+  # ---- uc006: Specification browser and code-to-spec traceability ----
+
+  - use_case: rel02.0-uc006-specification-browser
+    name: Tree displays three top-level category nodes
+    inputs:
+      docs_specs_files:
+        use_cases: ["rel01.0-uc001-orchestrator-initialization.yaml"]
+        prds: ["prd001-orchestrator-core.yaml"]
+        test_suites: ["test-rel01.0.yaml"]
+    expected:
+      top_level_nodes:
+        - { label: "Use Cases", children_count: 1 }
+        - { label: "PRDs", children_count: 1 }
+        - { label: "Test Suites", children_count: 1 }
+
+  - use_case: rel02.0-uc006-specification-browser
+    name: Expanding use case shows PRD touchpoints
+    inputs:
+      use_case:
+        id: "rel01.0-uc003-measure-workflow"
+        touchpoints:
+          - "prd003-cobbler-workflows R2"
+          - "prd001-orchestrator-core R1"
+    expected:
+      child_nodes:
+        - "prd003-cobbler-workflows R2"
+        - "prd001-orchestrator-core R1"
+
+  - use_case: rel02.0-uc006-specification-browser
+    name: Click node opens YAML file
+    inputs:
+      clicked_node:
+        type: "use_case"
+        id: "rel01.0-uc001-orchestrator-initialization"
+    expected:
+      file_opened: "docs/specs/use-cases/rel01.0-uc001-orchestrator-initialization.yaml"
+
+  - use_case: rel02.0-uc006-specification-browser
+    name: CodeLens appears above prd annotation comment
+    inputs:
+      go_file: "pkg/orchestrator/context.go"
+      annotation: "// prd: prd003-cobbler-workflows R9"
+    expected:
+      codelens_visible: true
+      codelens_label: "View Requirement"
+      target_file: "docs/specs/product-requirements/prd003-cobbler-workflows.yaml"
+
+  - use_case: rel02.0-uc006-specification-browser
+    name: Tree refreshes when spec files change
+    inputs:
+      action: "Add new file docs/specs/use-cases/rel01.0-uc009-phase-context-files.yaml"
+      watcher_fires: true
+    expected:
+      tree_refreshed: true
+      new_node_visible: "rel01.0-uc009-phase-context-files"
+
 cleanup:
   - Reset to main branch if on generation branch
   - Close all integrated terminals
+  - Close all webview panels

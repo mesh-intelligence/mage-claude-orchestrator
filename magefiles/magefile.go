@@ -272,7 +272,11 @@ func (Podman) Clean() error { return newOrch().PodmanClean() }
 // --- Vscode targets ---
 
 // Push compiles the extension and installs it into VS Code.
-func (Vscode) Push() error { return newOrch().VscodePush() }
+// Pass a profile name to target a specific VS Code profile (e.g., mage vscode:push GO).
+// Pass an empty string to install to the default profile.
+func (Vscode) Push(profile string) error { return newOrch().VscodePush(profile) }
 
 // Pop uninstalls the extension from VS Code.
-func (Vscode) Pop() error { return newOrch().VscodePop() }
+// Pass a profile name to target a specific VS Code profile (e.g., mage vscode:pop GO).
+// Pass an empty string to uninstall from the default profile.
+func (Vscode) Pop(profile string) error { return newOrch().VscodePop(profile) }

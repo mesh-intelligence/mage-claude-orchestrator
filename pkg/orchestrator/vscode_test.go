@@ -59,6 +59,84 @@ func TestVsixFilename_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestCodeInstallArgs_WithProfile(t *testing.T) {
+	got := codeInstallArgs("/path/to/ext.vsix", "GO")
+	want := []string{"--install-extension", "/path/to/ext.vsix", "--profile", "GO"}
+	if len(got) != len(want) {
+		t.Fatalf("codeInstallArgs: got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("codeInstallArgs[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestCodeInstallArgs_NoProfile(t *testing.T) {
+	got := codeInstallArgs("/path/to/ext.vsix", "")
+	want := []string{"--install-extension", "/path/to/ext.vsix"}
+	if len(got) != len(want) {
+		t.Fatalf("codeInstallArgs: got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("codeInstallArgs[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestCodeUninstallArgs_WithProfile(t *testing.T) {
+	got := codeUninstallArgs("publisher.ext", "Work")
+	want := []string{"--uninstall-extension", "publisher.ext", "--profile", "Work"}
+	if len(got) != len(want) {
+		t.Fatalf("codeUninstallArgs: got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("codeUninstallArgs[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestCodeUninstallArgs_NoProfile(t *testing.T) {
+	got := codeUninstallArgs("publisher.ext", "")
+	want := []string{"--uninstall-extension", "publisher.ext"}
+	if len(got) != len(want) {
+		t.Fatalf("codeUninstallArgs: got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("codeUninstallArgs[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestCodeListArgs_WithProfile(t *testing.T) {
+	got := codeListArgs("GO")
+	want := []string{"--list-extensions", "--profile", "GO"}
+	if len(got) != len(want) {
+		t.Fatalf("codeListArgs: got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("codeListArgs[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestCodeListArgs_NoProfile(t *testing.T) {
+	got := codeListArgs("")
+	want := []string{"--list-extensions"}
+	if len(got) != len(want) {
+		t.Fatalf("codeListArgs: got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("codeListArgs[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestSplitLines_MultiLine(t *testing.T) {
 	got := splitLines("alpha\nbeta\ngamma")
 	want := []string{"alpha", "beta", "gamma"}

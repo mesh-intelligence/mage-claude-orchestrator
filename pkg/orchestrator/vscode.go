@@ -31,9 +31,11 @@ const vsCodeExtensionDir = "vscode-extension"
 const vsCodeExtensionID = "mesh-intelligence.mage-orchestrator"
 
 // VscodePush compiles the VS Code extension from source, packages it as a
-// .vsix archive, and installs it into VS Code. It verifies that npm and
-// the code CLI are available before proceeding.
-func (o *Orchestrator) VscodePush() error {
+// .vsix archive, and installs it into VS Code. When profile is non-empty the
+// extension is installed into that VS Code profile via --profile. It verifies
+// that npm and the code CLI are available before proceeding.
+// prd: prd006-vscode-extension R10.6, R10.7
+func (o *Orchestrator) VscodePush(profile string) error {
 	root, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("vscode:push: getting working directory: %w", err)
@@ -86,8 +88,14 @@ func (o *Orchestrator) VscodePush() error {
 
 	// Step 5: install the extension.
 	vsixPath := filepath.Join(extDir, vsixName)
+	codeArgs := codeInstallArgs(vsixPath, profile)
 	logf("vscode:push: installing extension from %s", vsixPath)
-	codeCmd := exec.Command(binCode, "--install-extension", vsixPath)
+	if profile != "" {
+		logf("vscode:push: targeting profile %q", profile)
+	} else {
+		logf("vscode:push: installing to default profile (use 'mage vscode:push <profile>' to target a specific profile)")
+	}
+	codeCmd := exec.Command(binCode, codeArgs...)
 	codeCmd.Stdout = os.Stdout
 	codeCmd.Stderr = os.Stderr
 	if err := codeCmd.Run(); err != nil {
@@ -98,21 +106,56 @@ func (o *Orchestrator) VscodePush() error {
 	return nil
 }
 
-// VscodePop uninstalls the VS Code extension. The operation is idempotent:
+// codeInstallArgs builds the argument list for code --install-extension,
+// optionally adding --profile when profile is non-empty.
+func codeInstallArgs(vsixPath, profile string) []string {
+	args := []string{"--install-extension", vsixPath}
+	if profile != "" {
+		args = append(args, "--profile", profile)
+	}
+	return args
+}
+
+// codeUninstallArgs builds the argument list for code --uninstall-extension,
+// optionally adding --profile when profile is non-empty.
+func codeUninstallArgs(extensionID, profile string) []string {
+	args := []string{"--uninstall-extension", extensionID}
+	if profile != "" {
+		args = append(args, "--profile", profile)
+	}
+	return args
+}
+
+// codeListArgs builds the argument list for code --list-extensions,
+// optionally adding --profile when profile is non-empty.
+func codeListArgs(profile string) []string {
+	args := []string{"--list-extensions"}
+	if profile != "" {
+		args = append(args, "--profile", profile)
+	}
+	return args
+}
+
+// VscodePop uninstalls the VS Code extension. When profile is non-empty the
+// extension is removed from that VS Code profile. The operation is idempotent:
 // it succeeds even if the extension is not currently installed.
-func (o *Orchestrator) VscodePop() error {
+// prd: prd006-vscode-extension R10.6
+func (o *Orchestrator) VscodePop(profile string) error {
 	if _, err := exec.LookPath(binCode); err != nil {
 		return fmt.Errorf("vscode:pop: VS Code CLI (code) is not installed or not on PATH; open VS Code and run 'Shell Command: Install code command in PATH'")
 	}
 
 	logf("vscode:pop: uninstalling extension %s", vsCodeExtensionID)
-	cmd := exec.Command(binCode, "--uninstall-extension", vsCodeExtensionID)
+	if profile != "" {
+		logf("vscode:pop: targeting profile %q", profile)
+	}
+	cmd := exec.Command(binCode, codeUninstallArgs(vsCodeExtensionID, profile)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		// The code CLI exits non-zero when the extension is not installed.
 		// Check if it is actually installed before treating this as an error.
-		listOut, listErr := exec.Command(binCode, "--list-extensions").Output()
+		listOut, listErr := exec.Command(binCode, codeListArgs(profile)...).Output()
 		if listErr == nil && slices.Contains(splitLines(string(listOut)), vsCodeExtensionID) {
 			return fmt.Errorf("vscode:pop: uninstall failed: %w", err)
 		}

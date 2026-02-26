@@ -123,6 +123,9 @@ func (o *Orchestrator) RunCycles(label string) error {
 			}
 		}
 
+		// Refresh analysis before each cycle so stitch sees current state.
+		o.RunPreCycleAnalysis()
+
 		logf("generator %s: cycle %d — stitch (limit=%d, stitched so far=%d)", label, cycle, perCycle, totalStitched)
 		n, err := o.RunStitchN(perCycle)
 		totalStitched += n

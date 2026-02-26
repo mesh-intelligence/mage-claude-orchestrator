@@ -96,6 +96,9 @@ func (o *Orchestrator) RunMeasure() error {
 
 	_ = os.MkdirAll(o.cfg.Cobbler.Dir, 0o755) // best-effort; dir may already exist
 
+	// Run pre-cycle analysis so the measure prompt sees current project state.
+	o.RunPreCycleAnalysis()
+
 	// Clean up old measure temp files.
 	matches, _ := filepath.Glob(o.cfg.Cobbler.Dir + "measure-*.yaml") // empty list on error is acceptable
 	if len(matches) > 0 {

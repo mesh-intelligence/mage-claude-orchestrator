@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -22,6 +23,7 @@ type AnalyzeResult struct {
 	UseCasesNotInRoadmap      []string // Use cases not listed in road-map.yaml
 	SchemaErrors              []string // YAML files with fields not matching typed structs
 	ConstitutionDrift         []string // Files in docs/constitutions/ that differ from embedded copies
+	BrokenCitations           []string // Touchpoints citing non-existent requirement groups in PRDs
 }
 
 // Analyze performs cross-artifact consistency checks.
@@ -37,10 +39,18 @@ func (o *Orchestrator) Analyze() error {
 		return fmt.Errorf("globbing PRDs: %w", err)
 	}
 	prdIDs := make(map[string]bool)
+	prdReqGroups := make(map[string]map[string]bool) // PRD ID -> set of requirement group keys
 	for _, path := range prdFiles {
 		id := extractID(path)
 		if id != "" {
 			prdIDs[id] = true
+		}
+		if prd := loadYAML[PRDDoc](path); prd != nil {
+			groups := make(map[string]bool)
+			for groupKey := range prd.Requirements {
+				groups[groupKey] = true
+			}
+			prdReqGroups[id] = groups
 		}
 	}
 	logf("analyze: found %d PRDs", len(prdIDs))
@@ -51,7 +61,8 @@ func (o *Orchestrator) Analyze() error {
 		return fmt.Errorf("globbing use cases: %w", err)
 	}
 	ucIDs := make(map[string]bool)
-	ucToPRDs := make(map[string][]string) // use case ID -> PRD IDs from touchpoints
+	ucToPRDs := make(map[string][]string)    // use case ID -> PRD IDs from touchpoints
+	ucTouchpoints := make(map[string][]string) // use case ID -> raw touchpoint strings
 	for _, path := range ucFiles {
 		uc, err := loadUseCase(path)
 		if err != nil {
@@ -60,6 +71,7 @@ func (o *Orchestrator) Analyze() error {
 		}
 		ucIDs[uc.ID] = true
 		ucToPRDs[uc.ID] = extractPRDsFromTouchpoints(uc.Touchpoints)
+		ucTouchpoints[uc.ID] = uc.Touchpoints
 	}
 	logf("analyze: found %d use cases", len(ucIDs))
 
@@ -158,7 +170,24 @@ func (o *Orchestrator) Analyze() error {
 		}
 	}
 
-	// Check 6: YAML schema validation — load all docs into typed structs
+	// Check 6: Broken citations (touchpoint cites requirement group not in PRD)
+	for ucID, tps := range ucTouchpoints {
+		for _, cite := range extractCitationsFromTouchpoints(tps) {
+			groups, ok := prdReqGroups[cite.PRDID]
+			if !ok {
+				continue // PRD missing or unparsable — handled by BrokenTouchpoints
+			}
+			for _, group := range cite.Groups {
+				if !groups[group] {
+					result.BrokenCitations = append(result.BrokenCitations,
+						fmt.Sprintf("%s: cites %s %s (requirement group not found)", ucID, cite.PRDID, group))
+				}
+			}
+		}
+	}
+	logf("analyze: broken citations found %d", len(result.BrokenCitations))
+
+	// Check 7: YAML schema validation — load all docs into typed structs
 	// with strict field checking. Unknown YAML fields indicate a schema
 	// mismatch that will cause data loss during measure prompt assembly.
 	result.SchemaErrors = o.validateDocSchemas()
@@ -195,6 +224,7 @@ func (r AnalyzeResult) printReport(prdCount, ucCount, tsCount int) error {
 	hasIssues = printSection("Use cases not in roadmap", r.UseCasesNotInRoadmap) || hasIssues
 	hasIssues = printSection("YAML schema errors (fields not matching typed structs — data will be lost in measure prompt)", r.SchemaErrors) || hasIssues
 	hasIssues = printSection("Constitution drift (docs/constitutions/ differs from embedded pkg/orchestrator/constitutions/)", r.ConstitutionDrift) || hasIssues
+	hasIssues = printSection("Broken citations (touchpoint cites non-existent requirement group)", r.BrokenCitations) || hasIssues
 
 	if !hasIssues {
 		fmt.Printf("\n✅ All consistency checks passed\n")
@@ -301,6 +331,67 @@ func extractUseCaseIDsFromTraces(traces []string) []string {
 		}
 	}
 	return ucs
+}
+
+// prdCitation represents a reference to a PRD with specific requirement
+// groups extracted from a use case touchpoint.
+type prdCitation struct {
+	PRDID  string
+	Groups []string // requirement group IDs like "R1", "R2"
+}
+
+// reqGroupRe matches requirement group references like "R1", "R2", "R9".
+var reqGroupRe = regexp.MustCompile(`^R\d+`)
+
+// extractReqGroup extracts the requirement group prefix from a reference.
+// "R1" returns "R1"; "R2.1" returns "R2"; "R9.1-R9.4" returns "R9".
+func extractReqGroup(s string) string {
+	return reqGroupRe.FindString(s)
+}
+
+// extractCitationsFromTouchpoints parses touchpoint strings to extract
+// PRD IDs and their associated requirement group references.
+// Touchpoint format: "T1: Component: prd001-name R1, R2, prd002-name R3"
+func extractCitationsFromTouchpoints(touchpoints []string) []prdCitation {
+	var citations []prdCitation
+	for _, tp := range touchpoints {
+		var current *prdCitation
+		for _, part := range strings.Fields(tp) {
+			// Strip parentheses and trailing commas/periods.
+			cleaned := strings.TrimLeft(part, "(")
+			cleaned = strings.TrimRight(cleaned, "),.")
+
+			if strings.HasPrefix(cleaned, "prd") {
+				if current != nil {
+					citations = append(citations, *current)
+				}
+				current = &prdCitation{PRDID: cleaned}
+				continue
+			}
+			if current == nil {
+				continue
+			}
+			group := extractReqGroup(cleaned)
+			if group == "" {
+				continue
+			}
+			// Deduplicate within this citation.
+			dup := false
+			for _, g := range current.Groups {
+				if g == group {
+					dup = true
+					break
+				}
+			}
+			if !dup {
+				current.Groups = append(current.Groups, group)
+			}
+		}
+		if current != nil {
+			citations = append(citations, *current)
+		}
+	}
+	return citations
 }
 
 // validateDocSchemas resolves configured context sources and validates

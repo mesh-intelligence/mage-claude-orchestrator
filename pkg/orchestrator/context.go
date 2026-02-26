@@ -99,6 +99,7 @@ type ProjectContext struct {
 	Roadmap        *RoadmapDoc        `yaml:"roadmap,omitempty"`
 	Specs          *SpecsCollection   `yaml:"specs,omitempty"`
 	Engineering    []*EngineeringDoc  `yaml:"engineering,omitempty"`
+	Analysis       *AnalysisDoc       `yaml:"analysis,omitempty"`
 	SourceCode     []SourceFile       `yaml:"source_code,omitempty"`
 	Issues         []ContextIssue     `yaml:"issues,omitempty"`
 	Extra          []*NamedDoc        `yaml:"extra,omitempty"`
@@ -1307,12 +1308,16 @@ func buildProjectContext(existingIssuesJSON string, project ProjectConfig, phase
 
 	ctx.Issues = parseIssuesJSON(existingIssuesJSON)
 
-	logf("buildProjectContext: vision=%v arch=%v roadmap=%v specs=%v eng=%d issues=%d extra=%d src=%d files=%d",
+	// Load pre-cycle analysis results if present in the scratch directory.
+	ctx.Analysis = loadAnalysisDoc(dirCobbler)
+
+	logf("buildProjectContext: vision=%v arch=%v roadmap=%v specs=%v eng=%d analysis=%v issues=%d extra=%d src=%d files=%d",
 		ctx.Vision != nil,
 		ctx.Architecture != nil,
 		ctx.Roadmap != nil,
 		ctx.Specs != nil,
 		len(ctx.Engineering),
+		ctx.Analysis != nil,
 		len(ctx.Issues),
 		len(ctx.Extra),
 		len(ctx.SourceCode),

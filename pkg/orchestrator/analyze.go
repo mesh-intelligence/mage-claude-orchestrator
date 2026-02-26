@@ -26,9 +26,17 @@ type AnalyzeResult struct {
 	BrokenCitations           []string // Touchpoints citing non-existent requirement groups in PRDs
 }
 
-// Analyze performs cross-artifact consistency checks.
-// Returns nil error if all checks pass, or an error with detailed report if issues found.
-func (o *Orchestrator) Analyze() error {
+// analyzeCounts holds the artifact counts discovered during analysis.
+type analyzeCounts struct {
+	PRDs       int
+	UseCases   int
+	TestSuites int
+}
+
+// collectAnalyzeResult performs all cross-artifact consistency checks and
+// returns the structured result without printing. This is the data-gathering
+// core shared by Analyze() (interactive) and RunPreCycleAnalysis() (automated).
+func (o *Orchestrator) collectAnalyzeResult() (AnalyzeResult, analyzeCounts, error) {
 	logf("analyze: starting cross-artifact consistency checks")
 
 	result := AnalyzeResult{}
@@ -36,7 +44,7 @@ func (o *Orchestrator) Analyze() error {
 	// 1. Load all PRDs
 	prdFiles, err := filepath.Glob("docs/specs/product-requirements/prd*.yaml")
 	if err != nil {
-		return fmt.Errorf("globbing PRDs: %w", err)
+		return result, analyzeCounts{}, fmt.Errorf("globbing PRDs: %w", err)
 	}
 	prdIDs := make(map[string]bool)
 	prdReqGroups := make(map[string]map[string]bool) // PRD ID -> set of requirement group keys
@@ -58,7 +66,7 @@ func (o *Orchestrator) Analyze() error {
 	// 2. Load all use cases
 	ucFiles, err := filepath.Glob("docs/specs/use-cases/rel*.yaml")
 	if err != nil {
-		return fmt.Errorf("globbing use cases: %w", err)
+		return result, analyzeCounts{}, fmt.Errorf("globbing use cases: %w", err)
 	}
 	ucIDs := make(map[string]bool)
 	ucToPRDs := make(map[string][]string)    // use case ID -> PRD IDs from touchpoints
@@ -78,7 +86,7 @@ func (o *Orchestrator) Analyze() error {
 	// 3. Load all test suites (per-release YAML specs)
 	testFiles, err := filepath.Glob("docs/specs/test-suites/test-rel*.yaml")
 	if err != nil {
-		return fmt.Errorf("globbing test suites: %w", err)
+		return result, analyzeCounts{}, fmt.Errorf("globbing test suites: %w", err)
 	}
 	testSuiteIDs := make(map[string]bool)
 	testSuiteToUCs := make(map[string][]string) // test suite ID -> use case IDs from traces
@@ -193,12 +201,27 @@ func (o *Orchestrator) Analyze() error {
 	result.SchemaErrors = o.validateDocSchemas()
 	logf("analyze: schema validation found %d error(s)", len(result.SchemaErrors))
 
-	// Check 7: Constitution drift — compare docs/constitutions/ with
+	// Check 8: Constitution drift — compare docs/constitutions/ with
 	// embedded copies in pkg/orchestrator/constitutions/.
 	result.ConstitutionDrift = detectConstitutionDrift()
 	logf("analyze: constitution drift found %d file(s)", len(result.ConstitutionDrift))
 
-	return result.printReport(len(prdIDs), len(ucIDs), len(testSuiteIDs))
+	counts := analyzeCounts{
+		PRDs:       len(prdIDs),
+		UseCases:   len(ucIDs),
+		TestSuites: len(testSuiteIDs),
+	}
+	return result, counts, nil
+}
+
+// Analyze performs cross-artifact consistency checks.
+// Returns nil error if all checks pass, or an error with detailed report if issues found.
+func (o *Orchestrator) Analyze() error {
+	result, counts, err := o.collectAnalyzeResult()
+	if err != nil {
+		return err
+	}
+	return result.printReport(counts.PRDs, counts.UseCases, counts.TestSuites)
 }
 
 // printSection prints a labeled list if items is non-empty, returning true.

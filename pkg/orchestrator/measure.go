@@ -386,16 +386,23 @@ func getCompletedWork() []string {
 		logf("getCompletedWork: bd list closed failed: %v", err)
 		return nil
 	}
+	summaries := parseCompletedWork(out)
+	logf("getCompletedWork: %d closed task(s)", len(summaries))
+	return summaries
+}
+
+// parseCompletedWork converts JSON-encoded closed tasks into human-readable
+// summary strings. Each entry has the form "COMPLETED: <id> — <title>".
+func parseCompletedWork(jsonData []byte) []string {
 	var issues []ContextIssue
-	if err := json.Unmarshal(out, &issues); err != nil {
-		logf("getCompletedWork: parse error: %v", err)
+	if err := json.Unmarshal(jsonData, &issues); err != nil {
+		logf("parseCompletedWork: parse error: %v", err)
 		return nil
 	}
 	summaries := make([]string, 0, len(issues))
 	for _, ci := range issues {
 		summaries = append(summaries, fmt.Sprintf("COMPLETED: %s — %s", ci.ID, ci.Title))
 	}
-	logf("getCompletedWork: %d closed task(s)", len(summaries))
 	return summaries
 }
 

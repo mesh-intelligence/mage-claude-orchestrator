@@ -373,6 +373,32 @@ func getExistingIssues() string {
 	return string(out)
 }
 
+// getCompletedWork returns a list of human-readable summaries of closed
+// tasks. Each entry has the form "COMPLETED: <id> — <title>". This is
+// injected into the measure prompt as an unambiguous signal that the work
+// was already done.
+func getCompletedWork() []string {
+	if _, err := exec.LookPath(binBd); err != nil {
+		return nil
+	}
+	out, err := bdListClosedTasks()
+	if err != nil {
+		logf("getCompletedWork: bd list closed failed: %v", err)
+		return nil
+	}
+	var issues []ContextIssue
+	if err := json.Unmarshal(out, &issues); err != nil {
+		logf("getCompletedWork: parse error: %v", err)
+		return nil
+	}
+	summaries := make([]string, 0, len(issues))
+	for _, ci := range issues {
+		summaries = append(summaries, fmt.Sprintf("COMPLETED: %s — %s", ci.ID, ci.Title))
+	}
+	logf("getCompletedWork: %d closed task(s)", len(summaries))
+	return summaries
+}
+
 func countJSONArray(jsonStr string) int {
 	var arr []json.RawMessage
 	if err := json.Unmarshal([]byte(jsonStr), &arr); err != nil {
@@ -406,6 +432,10 @@ func (o *Orchestrator) buildMeasurePrompt(userInput, existingIssues string, limi
 		logf("buildMeasurePrompt: buildProjectContext error: %v", ctxErr)
 		projectCtx = &ProjectContext{}
 	}
+
+	// Add completed-work summary so the measure agent sees what was already
+	// done and does not re-propose it.
+	projectCtx.CompletedWork = getCompletedWork()
 
 	placeholders := map[string]string{
 		"limit":     fmt.Sprintf("%d", limit),

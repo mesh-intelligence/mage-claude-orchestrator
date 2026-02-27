@@ -18,6 +18,7 @@ import {
   ComparisonBrowserProvider,
   GitRefContentProvider,
 } from "./comparisonBrowser";
+import { ConstitutionPreview } from "./constitutionPreview";
 
 /** Output channel for error and diagnostic logging. */
 let outputChannel: vscode.OutputChannel;
@@ -217,6 +218,24 @@ export function activate(context: vscode.ExtensionContext): void {
       beadsWatcher.onDidChange(safeCallback("dashboard.refresh", () => dashboard.refresh())),
       beadsWatcher.onDidCreate(safeCallback("dashboard.refresh", () => dashboard.refresh())),
       beadsWatcher.onDidDelete(safeCallback("dashboard.refresh", () => dashboard.refresh()))
+    );
+
+    // Constitution YAML preview panel.
+    const constitutionPreview = new ConstitutionPreview();
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        "mageOrchestrator.previewConstitution",
+        (uri?: vscode.Uri) => {
+          const targetUri = uri ?? vscode.window.activeTextEditor?.document.uri;
+          if (!targetUri) {
+            vscode.window.showErrorMessage(
+              "Cobbler: no YAML file selected for preview"
+            );
+            return;
+          }
+          constitutionPreview.show(targetUri);
+        }
+      )
     );
 
     // Code-to-spec traceability CodeLens (prd006 R9).

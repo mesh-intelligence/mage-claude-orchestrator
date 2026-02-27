@@ -147,9 +147,13 @@ func (o *Orchestrator) Scaffold(targetDir, orchestratorRoot string) error {
 	}
 
 	cfgPath := filepath.Join(targetDir, DefaultConfigFile)
-	logf("scaffold: writing %s", cfgPath)
-	if err := writeScaffoldConfig(cfgPath, cfg); err != nil {
-		return fmt.Errorf("writing configuration.yaml: %w", err)
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		logf("scaffold: writing %s", cfgPath)
+		if err := writeScaffoldConfig(cfgPath, cfg); err != nil {
+			return fmt.Errorf("writing configuration.yaml: %w", err)
+		}
+	} else {
+		logf("scaffold: %s already exists, skipping", DefaultConfigFile)
 	}
 
 	// 4. Wire magefiles/go.mod.

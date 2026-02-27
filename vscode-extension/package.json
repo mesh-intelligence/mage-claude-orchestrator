@@ -77,6 +77,10 @@
       {
         "command": "mageOrchestrator.openComparisonDiff",
         "title": "Open Diff"
+      },
+      {
+        "command": "mageOrchestrator.previewConstitution",
+        "title": "Cobbler: Preview Constitution"
       }
     ],
     "viewsContainers": {
@@ -99,6 +103,13 @@
           "command": "mageOrchestrator.selectForCompare",
           "when": "view == mageOrchestrator.status && viewItem == generation",
           "group": "comparison"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "mageOrchestrator.previewConstitution",
+          "when": "resourceExtname == .yaml",
+          "group": "navigation"
         }
       ]
     },

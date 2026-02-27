@@ -49,6 +49,9 @@ type Compare mg.Namespace
 // Vscode groups the VS Code extension build and install targets.
 type Vscode mg.Namespace
 
+// Constitution groups constitution preview targets.
+type Constitution mg.Namespace
+
 // baseCfg holds the configuration loaded from configuration.yaml.
 var baseCfg orchestrator.Config
 
@@ -314,3 +317,9 @@ func (Vscode) Push(profile string) error { return newOrch().VscodePush(profile) 
 // Pass a profile name to target a specific VS Code profile (e.g., mage vscode:pop GO).
 // Pass an empty string to uninstall from the default profile.
 func (Vscode) Pop(profile string) error { return newOrch().VscodePop(profile) }
+
+// --- Constitution targets ---
+
+// Preview reads a constitution YAML file and prints its sections as markdown to stdout.
+// Pass the path to a constitution YAML file (e.g., mage constitution:preview pkg/orchestrator/constitutions/execution.yaml).
+func (Constitution) Preview(file string) error { return newOrch().ConstitutionPreviewFile(file) }

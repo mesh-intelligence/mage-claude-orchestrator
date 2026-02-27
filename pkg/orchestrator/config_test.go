@@ -267,3 +267,102 @@ func TestLoadConfig_EnforceMeasureValidationDefaultsFalse(t *testing.T) {
 		t.Errorf("MaxMeasureRetries default: got %d, want 0", cfg.Cobbler.MaxMeasureRetries)
 	}
 }
+
+// --- LoadConfig: SeedFiles resolution ---
+
+func TestLoadConfig_SeedFilesResolved(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	// Write a seed source file.
+	seedSrc := filepath.Join(dir, "template.go.tmpl")
+	if err := os.WriteFile(seedSrc, []byte("package {{.ModulePath}}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	yaml := "project:\n  seed_files:\n    cmd/main.go: " + seedSrc + "\n"
+	f := writeTemp(t, yaml)
+	cfg, err := LoadConfig(f)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := cfg.Project.SeedFiles["cmd/main.go"]; got != "package {{.ModulePath}}" {
+		t.Errorf("SeedFiles[\"cmd/main.go\"]: got %q, want file content", got)
+	}
+}
+
+func TestLoadConfig_SeedFilesMissing(t *testing.T) {
+	t.Parallel()
+	yaml := "project:\n  seed_files:\n    cmd/main.go: /nonexistent/template.go.tmpl\n"
+	f := writeTemp(t, yaml)
+	_, err := LoadConfig(f)
+	if err == nil {
+		t.Error("expected error for missing seed source file, got nil")
+	}
+}
+
+func TestLoadConfig_MeasurePromptFromFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	promptPath := filepath.Join(dir, "measure.yaml")
+	if err := os.WriteFile(promptPath, []byte("role: measure\ntask: generate issues"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	yaml := "cobbler:\n  measure_prompt: " + promptPath + "\n"
+	f := writeTemp(t, yaml)
+	cfg, err := LoadConfig(f)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Cobbler.MeasurePrompt != "role: measure\ntask: generate issues" {
+		t.Errorf("MeasurePrompt: got %q, want file content", cfg.Cobbler.MeasurePrompt)
+	}
+}
+
+// --- WriteDefaultConfig ---
+
+func TestWriteDefaultConfig_CreatesFile(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "configuration.yaml")
+	if err := WriteDefaultConfig(path); err != nil {
+		t.Fatalf("WriteDefaultConfig: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading written config: %v", err)
+	}
+	content := string(data)
+
+	// File should start with the header comment.
+	if len(content) == 0 {
+		t.Fatal("WriteDefaultConfig wrote an empty file")
+	}
+	if content[:1] != "#" {
+		t.Errorf("expected file to start with '#', got %q", content[:10])
+	}
+
+	// Re-parsing the written file should apply defaults correctly.
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig on written config: %v", err)
+	}
+	if cfg.Project.BinaryDir != "bin" {
+		t.Errorf("BinaryDir: got %q, want \"bin\"", cfg.Project.BinaryDir)
+	}
+	if cfg.Claude.MaxTimeSec == 0 {
+		t.Error("Claude.MaxTimeSec should be non-zero after WriteDefaultConfig")
+	}
+}
+
+func TestWriteDefaultConfig_ExistingFileError(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "configuration.yaml")
+	// Pre-create the file.
+	if err := os.WriteFile(path, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteDefaultConfig(path); err == nil {
+		t.Error("expected error when file already exists, got nil")
+	}
+}

@@ -14,6 +14,7 @@ traces:
   - rel01.0-uc007-build-tooling
   - rel01.0-uc008-performance-benchmarks
   - rel01.0-uc009-phase-context-files
+  - rel01.0-uc010-worktree-based-invocation
 
 tags:
   - unit
@@ -980,6 +981,34 @@ test_cases:
       exit_code: 0
       state:
         log_contains: "fallback"
+
+# ---- uc010: Worktree-based invocation ----
+
+  - use_case: rel01.0-uc010-worktree-based-invocation
+    name: worktreeBasePath returns identical value from main repo and from git worktree
+    go_test: TestRel01_UC010_WorktreeBasePathStable
+    inputs:
+      command: |
+        Init git repo in temp dir with an initial commit.
+        Add a worktree: git worktree add ./wt -b feature-test
+        Call worktreeBasePath() from main repo dir.
+        Call worktreeBasePath() from ./wt dir.
+    expected:
+      state:
+        both_paths_equal: true
+        path_suffix: "-worktrees"
+        path_based_on: "main repo name, not worktree directory name"
+
+  - use_case: rel01.0-uc010-worktree-based-invocation
+    name: worktreeBasePath falls back to Getwd when git is unavailable
+    go_test: TestRel01_UC010_WorktreeBasePathFallback
+    inputs:
+      command: |
+        Call worktreeBasePath() from a directory that is not a git repository.
+    expected:
+      state:
+        path_suffix: "-worktrees"
+        no_error: true
 
 cleanup:
   - Switch to main branch

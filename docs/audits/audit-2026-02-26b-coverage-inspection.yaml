@@ -1,0 +1,124 @@
+# Audit: Full Requirements Coverage, Test Coverage, and Code Inspection
+# Date: 2026-02-26 (run B)
+# GitHub Issue: petar-djukic/cobbler-scaffold#59
+# Auditor: Claude Opus 4.6
+# Previous Audit: #44 (2026-02-26)
+
+audit:
+  date: "2026-02-26"
+  type: coverage-inspection
+  github_issue: 59
+  previous_audit: 44
+
+baseline:
+  go_loc_prod: 9625
+  go_loc_test: 7856
+  coverage: "32.7%"
+  note: "Baseline at start of audit, after GH-44/45 merged and stub test removed"
+
+coverage_trend:
+  - date: "2026-02-25"
+    coverage: "24.8%"
+    go_loc_prod: 8678
+    go_loc_test: 6265
+    note: "After audit #39"
+  - date: "2026-02-26"
+    coverage: "32.7%"
+    go_loc_prod: 9625
+    go_loc_test: 7856
+    note: "After audit #44 (pre-audit baseline)"
+  - date: "2026-02-26"
+    coverage: "34.0%"
+    go_loc_prod: 9625
+    go_loc_test: 8112
+    note: "After audit #59 (this run)"
+
+dependency_cleanup:
+  removed:
+    - package: github.com/spf13/cobra
+      version: v1.10.2
+      reason: "Indirect dep with no imports anywhere in codebase"
+    - package: github.com/spf13/pflag
+      version: v1.0.9
+      reason: "Indirect dep with no imports anywhere in codebase"
+    - package: github.com/inconshreveable/mousetrap
+      version: v1.1.0
+      reason: "Indirect dep pulled in by cobra; removed with cobra"
+  action: "go mod tidy"
+  result: "go build ./... and go test ./pkg/... pass after tidy"
+
+new_tests:
+  - file: pkg/orchestrator/orchestrator_test.go
+    count: 11
+    functions_covered:
+      - Config (TestOrchestratorConfig_ReturnsConfiguration, TestOrchestratorConfig_ReturnsCopy)
+      - NewFromFile (TestNewFromFile_ValidYAML, TestNewFromFile_NonexistentPath, TestNewFromFile_InvalidYAML)
+      - setGeneration/clearGeneration (TestSetClearGeneration)
+      - setPhase/clearPhase (TestSetClearPhase)
+      - openLogSink (TestOpenLogSink_CreatesFile, TestOpenLogSink_CreatesNestedDirectory, TestOpenLogSink_InvalidPath)
+  - file: pkg/orchestrator/cobbler_test.go
+    count: 3
+    functions_covered:
+      - buildPodmanCmd (TestBuildPodmanCmd_ContainsWorkdirMount, TestBuildPodmanCmd_ContainsImageAndClaude, TestBuildPodmanCmd_ExtraArgsAppended)
+  - file: pkg/orchestrator/prompt_test.go
+    count: 3
+    functions_covered:
+      - validatePromptTemplate (TestValidatePromptTemplate_MissingFile, TestValidatePromptTemplate_ValidFile, TestValidatePromptTemplate_InvalidYAML)
+
+untested_critical_paths:
+  - function: "runClaude"
+    file: "cobbler.go"
+    severity: high
+    reason: "Requires podman and Claude credentials; integration test only"
+  - function: "doOneTask"
+    file: "stitch.go"
+    severity: high
+    reason: "Full stitch task execution; tested via use case tests, not unit tests"
+  - function: "Measure / RunMeasure"
+    file: "measure.go"
+    severity: high
+    reason: "Requires Claude invocation; tested via use case tests"
+  - function: "Tag / nextDocRevision"
+    file: "tag.go"
+    severity: medium
+    reason: "nextDocRevision calls gitListTags; needs git mock or integration"
+  - function: "BeadsInit / BeadsReset"
+    file: "beads.go"
+    severity: medium
+    reason: "Requires bd CLI; tested via use case tests"
+  - function: "recordInvocation"
+    file: "cobbler.go"
+    severity: low
+    reason: "Calls bdCommentAdd; tested implicitly via stitch use cases"
+  - function: "captureLOC"
+    file: "cobbler.go"
+    severity: low
+    reason: "Runs go commands; integration only"
+
+stub_test_removed:
+  file: "tests/e2e/stitch_context_test.go"
+  function: "TestSelectiveContext_FullPipeline"
+  action: "Removed unconditional t.Skip() stub with no implementation"
+  follow_up_issue: 64
+  note: "Issue #64 filed to implement the real full-pipeline e2e test"
+
+code_issues_found:
+  - description: "scaffold.go:365 unused parameter mageDir (staticcheck unusedparams)"
+    severity: low
+    action: deferred
+  - description: "commands.go gitCountCommits and gitWorktreeCount unused functions (staticcheck)"
+    severity: low
+    action: deferred
+  - description: "config.go defaultContextSources const unused (staticcheck)"
+    severity: low
+    action: deferred
+  - description: "measure.go tagged switch opportunity (staticcheck QF1003)"
+    severity: info
+    action: deferred
+
+recommendations:
+  - "File issue for unused functions in commands.go (gitCountCommits, gitWorktreeCount)"
+  - "File issue for unused const defaultContextSources in config.go"
+  - "Investigate mock interfaces for bd CLI and git to enable unit testing of beads.go and stitch.go"
+  - "Consider adding -race flag to standard test runs to catch future race conditions early"
+  - "Implement TestSelectiveContext_FullPipeline (issue #64) when Claude credentials available in CI"

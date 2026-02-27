@@ -4,6 +4,7 @@
 package orchestrator
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -68,6 +69,40 @@ func TestSubstitutePlaceholders(t *testing.T) {
 	want := "Output to /tmp/out.yaml, max 5 tasks of 250-350 lines."
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// --- validatePromptTemplate ---
+
+func TestValidatePromptTemplate_MissingFile(t *testing.T) {
+	errs := validatePromptTemplate("/nonexistent/path/prompt.yaml")
+	if errs != nil {
+		t.Errorf("expected nil for missing file, got %v", errs)
+	}
+}
+
+func TestValidatePromptTemplate_ValidFile(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/prompt.yaml"
+	content := "role: assistant\ntask: do something\nconstraints: be good\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("writing file: %v", err)
+	}
+	errs := validatePromptTemplate(path)
+	if errs != nil {
+		t.Errorf("expected nil for valid file, got %v", errs)
+	}
+}
+
+func TestValidatePromptTemplate_InvalidYAML(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/prompt.yaml"
+	if err := os.WriteFile(path, []byte("not: [valid: yaml"), 0o644); err != nil {
+		t.Fatalf("writing file: %v", err)
+	}
+	errs := validatePromptTemplate(path)
+	if len(errs) == 0 {
+		t.Error("expected errors for invalid YAML, got none")
 	}
 }
 

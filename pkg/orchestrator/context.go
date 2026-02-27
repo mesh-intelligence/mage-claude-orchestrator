@@ -420,20 +420,21 @@ type DocSection struct {
 // It provides typed schema enforcement for the Go coding standards
 // constitution via validateYAMLStrict.
 type GoStyleDoc struct {
-	CopyrightHeader         string           `yaml:"copyright_header"`
-	Duplication             string           `yaml:"duplication"`
-	DesignPatterns          []GoStylePattern `yaml:"design_patterns"`
-	Interfaces              string           `yaml:"interfaces"`
-	StructAndFunctionDesign string           `yaml:"struct_and_function_design"`
-	ErrorHandling           string           `yaml:"error_handling"`
-	NoMagicStrings          string           `yaml:"no_magic_strings"`
-	ProjectStructure        string           `yaml:"project_structure"`
-	StandardPackages        []string         `yaml:"standard_packages"`
-	StructEmbedding         string           `yaml:"struct_embedding"`
-	NamingConventions       []string         `yaml:"naming_conventions"`
-	Concurrency             string           `yaml:"concurrency"`
-	Testing                 string           `yaml:"testing"`
-	CodeReviewChecklist     []string         `yaml:"code_review_checklist"`
+	CopyrightHeader         string                `yaml:"copyright_header"`
+	Duplication             string                `yaml:"duplication"`
+	DesignPatterns          []GoStylePattern      `yaml:"design_patterns"`
+	Interfaces              string                `yaml:"interfaces"`
+	StructAndFunctionDesign string                `yaml:"struct_and_function_design"`
+	ErrorHandling           string                `yaml:"error_handling"`
+	NoMagicStrings          string                `yaml:"no_magic_strings"`
+	ProjectStructure        string                `yaml:"project_structure"`
+	StandardPackages        []string              `yaml:"standard_packages"`
+	StructEmbedding         string                `yaml:"struct_embedding"`
+	NamingConventions       []string              `yaml:"naming_conventions"`
+	Concurrency             string                `yaml:"concurrency"`
+	Testing                 string                `yaml:"testing"`
+	CodeReviewChecklist     []string              `yaml:"code_review_checklist"`
+	Sections                []ConstitutionSection `yaml:"sections,omitempty"`
 }
 
 // GoStylePattern represents a single design pattern entry in the Go style
@@ -456,6 +457,17 @@ type ConstitutionArticle struct {
 	Rule  string `yaml:"rule"`
 }
 
+// ConstitutionSection is a tagged, titled, prose section within a constitution
+// file. The sections list provides a markdown-renderable view of each top-level
+// key in the constitution: tag is the machine-readable identifier (matches the
+// YAML key name), title is a human-readable heading, and content is a concise
+// prose summary of that section's purpose.
+type ConstitutionSection struct {
+	Tag     string `yaml:"tag"`
+	Title   string `yaml:"title"`
+	Content string `yaml:"content"`
+}
+
 // DesignDoc corresponds to docs/constitutions/design.yaml.
 type DesignDoc struct {
 	Articles               []ConstitutionArticle    `yaml:"articles"`
@@ -465,6 +477,7 @@ type DesignDoc struct {
 	WritingGuidelines      map[string]string        `yaml:"writing_guidelines"`
 	TraceabilityModel      map[string]string        `yaml:"traceability_model"`
 	CompletenessChecklists map[string][]string      `yaml:"completeness_checklists"`
+	Sections               []ConstitutionSection    `yaml:"sections,omitempty"`
 }
 
 // DesignStandards holds the documentation_standards section.
@@ -505,6 +518,7 @@ type ExecutionDoc struct {
 	SessionCompletion ExecSessionCompletion `yaml:"session_completion"`
 	Technology        ExecTechnology        `yaml:"technology"`
 	GitConventions    ExecGitConventions    `yaml:"git_conventions"`
+	Sections          []ConstitutionSection `yaml:"sections,omitempty"`
 }
 
 // ExecCodingStandards holds the coding_standards section.
@@ -574,6 +588,7 @@ type PlanningDoc struct {
 	IssueStructure            PlanningIssueStructure `yaml:"issue_structure"`
 	ExampleDocumentationIssue string                 `yaml:"example_documentation_issue"`
 	ExampleCodeIssue          string                 `yaml:"example_code_issue"`
+	Sections                  []ConstitutionSection  `yaml:"sections,omitempty"`
 }
 
 // PlanningIssueStructure holds the issue_structure section.
@@ -617,6 +632,7 @@ type PlanningCodeIssues struct {
 // TestingDoc corresponds to docs/constitutions/testing.yaml.
 type TestingDoc struct {
 	Articles []ConstitutionArticle `yaml:"articles"`
+	Sections []ConstitutionSection `yaml:"sections,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -629,6 +645,7 @@ type IssueFormatDoc struct {
 	YAMLRules  []IssueFormatRule           `yaml:"yaml_rules"`
 	FieldSpecs map[string]IssueFormatField `yaml:"field_specs"`
 	Examples   map[string]string           `yaml:"examples"`
+	Sections   []ConstitutionSection       `yaml:"sections,omitempty"`
 }
 
 // IssueFormatSchema holds the schema section.

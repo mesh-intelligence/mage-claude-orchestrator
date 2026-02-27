@@ -4,6 +4,7 @@
 package orchestrator
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -550,4 +551,52 @@ func TestSaveHistoryLog_NoOpWhenEmpty(t *testing.T) {
 	t.Parallel()
 	o := &Orchestrator{cfg: Config{Cobbler: CobblerConfig{HistoryDir: ""}}}
 	o.saveHistoryLog("ts", "phase", []byte("data"))
+}
+
+// --- buildPodmanCmd ---
+
+func TestBuildPodmanCmd_ContainsWorkdirMount(t *testing.T) {
+	t.Parallel()
+	o := New(Config{})
+	cmd := o.buildPodmanCmd(context.TODO(),"/work/mydir")
+
+	args := cmd.Args
+	// args[0] is the binary; remaining are the podman args
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "/work/mydir:/work/mydir") {
+		t.Errorf("buildPodmanCmd args missing workdir volume mount; args=%v", args)
+	}
+	if !strings.Contains(joined, "-w /work/mydir") {
+		t.Errorf("buildPodmanCmd args missing -w workdir flag; args=%v", args)
+	}
+}
+
+func TestBuildPodmanCmd_ContainsImageAndClaude(t *testing.T) {
+	t.Parallel()
+	cfg := Config{}
+	cfg.Podman.Image = "my-custom-image:latest"
+	o := New(cfg)
+	cmd := o.buildPodmanCmd(context.TODO(),"/work")
+
+	joined := strings.Join(cmd.Args, " ")
+	if !strings.Contains(joined, "my-custom-image:latest") {
+		t.Errorf("buildPodmanCmd args missing image; args=%v", cmd.Args)
+	}
+	if !strings.Contains(joined, binClaude) {
+		t.Errorf("buildPodmanCmd args missing claude binary %q; args=%v", binClaude, cmd.Args)
+	}
+}
+
+func TestBuildPodmanCmd_ExtraArgsAppended(t *testing.T) {
+	t.Parallel()
+	o := New(Config{})
+	cmd := o.buildPodmanCmd(context.TODO(),"/work", "--verbose", "--no-color")
+
+	joined := strings.Join(cmd.Args, " ")
+	if !strings.Contains(joined, "--verbose") {
+		t.Errorf("buildPodmanCmd missing extra arg --verbose; args=%v", cmd.Args)
+	}
+	if !strings.Contains(joined, "--no-color") {
+		t.Errorf("buildPodmanCmd missing extra arg --no-color; args=%v", cmd.Args)
+	}
 }

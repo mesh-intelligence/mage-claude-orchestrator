@@ -137,6 +137,58 @@ func TestRel01_UC006_PushIdempotent(t *testing.T) {
 	}
 }
 
+func TestRel01_UC006_ConfigPreservedOnReScaffold(t *testing.T) {
+	t.Parallel()
+	cfg, err := orchestrator.LoadConfig(filepath.Join(orchRoot, "configuration.yaml"))
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	orch := orchestrator.New(cfg)
+
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"go", "mod", "init", "example.com/sentinel-test"},
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.local"},
+		{"git", "config", "user.name", "Test"},
+		{"git", "config", "commit.gpgsign", "false"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("setup %v: %v\n%s", args, err, out)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "magefiles"), 0o755); err != nil {
+		t.Fatalf("mkdir magefiles: %v", err)
+	}
+
+	// First scaffold: creates configuration.yaml from detected project structure.
+	if err := orch.Scaffold(dir, orchRoot); err != nil {
+		t.Fatalf("first Scaffold: %v", err)
+	}
+
+	// Write a sentinel that must survive the second scaffold unchanged.
+	cfgPath := filepath.Join(dir, "configuration.yaml")
+	const sentinel = "# sentinel: preserved-across-rescaffold\n"
+	if err := os.WriteFile(cfgPath, []byte(sentinel), 0o644); err != nil {
+		t.Fatalf("writing sentinel: %v", err)
+	}
+
+	// Second scaffold: must not overwrite the existing configuration.yaml.
+	if err := orch.Scaffold(dir, orchRoot); err != nil {
+		t.Fatalf("second Scaffold: %v", err)
+	}
+
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading config after second scaffold: %v", err)
+	}
+	if string(data) != sentinel {
+		t.Errorf("configuration.yaml was overwritten on second scaffold; want sentinel preserved")
+	}
+}
+
 func TestRel01_UC006_PopOnNonScaffolded(t *testing.T) {
 	t.Parallel()
 	cfg, err := orchestrator.LoadConfig(filepath.Join(orchRoot, "configuration.yaml"))

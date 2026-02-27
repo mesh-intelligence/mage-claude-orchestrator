@@ -4,8 +4,11 @@
 package orchestrator
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -348,5 +351,177 @@ func TestStatusIcon(t *testing.T) {
 		if got := statusIcon(tc.input); got != tc.want {
 			t.Errorf("statusIcon(%q) = %q, want %q", tc.input, got, tc.want)
 		}
+	}
+}
+
+// --- printCodeStatusReport ---
+
+func TestPrintCodeStatusReport_ContainsReleaseInfo(t *testing.T) {
+	report := &CodeStatusReport{
+		Releases: []ReleaseCodeStatus{{
+			Version:       "01.0",
+			Name:          "Core",
+			SpecStatus:    "done",
+			CodeReadiness: "all implemented",
+			UseCases: []UCCodeStatus{
+				{ID: "rel01.0-uc001-init", SpecStatus: "done", CodeStatus: "implemented", TestFiles: 2},
+			},
+		}},
+	}
+
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	printCodeStatusReport(report)
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	out := buf.String()
+
+	for _, want := range []string{"01.0", "Core", "done", "all implemented", "rel01.0-uc001-init", "No gaps"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
+func TestPrintCodeStatusReport_ShowsGaps(t *testing.T) {
+	report := &CodeStatusReport{
+		Releases: []ReleaseCodeStatus{{
+			Version:       "01.0",
+			Name:          "Core",
+			SpecStatus:    "done",
+			CodeReadiness: "none",
+			UseCases: []UCCodeStatus{
+				{ID: "rel01.0-uc001-init", SpecStatus: "done", CodeStatus: "not started"},
+			},
+		}},
+		Gaps: []string{"release 01.0: spec status is \"done\" but code readiness is \"none\""},
+	}
+
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	printCodeStatusReport(report)
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	out := buf.String()
+
+	if !strings.Contains(out, "Gaps") {
+		t.Errorf("output missing 'Gaps' section\nfull output:\n%s", out)
+	}
+	if !strings.Contains(out, "01.0") {
+		t.Errorf("output missing release version\nfull output:\n%s", out)
+	}
+}
+
+// --- CodeStatus (integration) ---
+// These tests use os.Chdir because CodeStatus reads docs/road-map.yaml and
+// tests/ relative to the working directory.
+
+const roadmapYAML = `id: test-roadmap
+title: Test Roadmap
+releases:
+  - version: "01.0"
+    name: Core
+    status: done
+    use_cases:
+      - id: rel01.0-uc001-init
+        status: done
+`
+
+func TestCodeStatus_NoGaps(t *testing.T) {
+	// Not parallel: uses os.Chdir.
+	dir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	// Write docs/road-map.yaml.
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "road-map.yaml"), []byte(roadmapYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create matching test directory with a test file.
+	testDir := filepath.Join(dir, "tests", "rel01.0", "uc001")
+	if err := os.MkdirAll(testDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(testDir, "init_test.go"), []byte("package x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	o := New(Config{})
+	if err := o.CodeStatus(); err != nil {
+		t.Errorf("CodeStatus() returned error: %v", err)
+	}
+}
+
+func TestCodeStatus_WithGap(t *testing.T) {
+	// Not parallel: uses os.Chdir.
+	dir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	// Write docs/road-map.yaml with status=done but no matching test files.
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "road-map.yaml"), []byte(roadmapYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Do not create tests/ directory — gaps should be detected.
+
+	o := New(Config{})
+	err = o.CodeStatus()
+	if err == nil {
+		t.Fatal("CodeStatus() expected error for spec-vs-code gap, got nil")
+	}
+	if !strings.Contains(err.Error(), "gap") {
+		t.Errorf("error should mention 'gap', got: %v", err)
+	}
+}
+
+func TestCodeStatus_MissingRoadmap(t *testing.T) {
+	// Not parallel: uses os.Chdir.
+	dir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	// No docs/road-map.yaml present.
+	o := New(Config{})
+	if err := o.CodeStatus(); err == nil {
+		t.Fatal("CodeStatus() expected error when road-map.yaml missing, got nil")
 	}
 }

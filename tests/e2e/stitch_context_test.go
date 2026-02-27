@@ -177,14 +177,6 @@ func TestSelectiveContext_PromptSavedBeforeClaude(t *testing.T) {
 	}
 }
 
-// TestSelectiveContext_FullPipeline runs measure+stitch with Claude
-// and validates selective context filtering. Skipped when Claude is
-// not available.
-func TestSelectiveContext_FullPipeline(t *testing.T) {
-	t.Parallel()
-	t.Skip("requires Claude credentials and podman; run manually with COBBLER_E2E_CLAUDE=1")
-}
-
 // --- helpers ---
 
 func numberedLines(content string) string {

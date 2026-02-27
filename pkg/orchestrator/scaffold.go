@@ -137,7 +137,7 @@ func (o *Orchestrator) Scaffold(targetDir, orchestratorRoot string) error {
 	// binary. The template is stored in magefiles/ and referenced by
 	// seed_files in configuration.yaml.
 	if mainPkg != "" {
-		seedPath, tmplPath, err := scaffoldSeedTemplate(targetDir, modulePath, mainPkg, mageDir)
+		seedPath, tmplPath, err := scaffoldSeedTemplate(targetDir, modulePath, mainPkg)
 		if err != nil {
 			return fmt.Errorf("creating seed template: %w", err)
 		}
@@ -359,10 +359,10 @@ func detectBinaryName(modulePath string) string {
 	return parts[len(parts)-1]
 }
 
-// scaffoldSeedTemplate creates a version.go.tmpl in mageDir and returns
-// the destination path (relative to repo root) and the template source
-// path (relative to repo root) for use in seed_files configuration.
-func scaffoldSeedTemplate(targetDir, modulePath, mainPkg, mageDir string) (destPath, tmplPath string, err error) {
+// scaffoldSeedTemplate creates a version.go.tmpl in the magefiles directory
+// and returns the destination path (relative to repo root) and the template
+// source path (relative to repo root) for use in seed_files configuration.
+func scaffoldSeedTemplate(targetDir, modulePath, mainPkg string) (destPath, tmplPath string, err error) {
 	// Derive the relative directory for the main package.
 	// e.g. modulePath="github.com/org/repo", mainPkg="github.com/org/repo/cmd/app"
 	// → relDir="cmd/app"

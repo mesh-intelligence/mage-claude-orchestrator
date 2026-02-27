@@ -188,34 +188,6 @@ func gitCurrentBranch() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// gitCountCommits returns the number of commits reachable from toRef
-// but not from fromRef (i.e. commits in fromRef..toRef).
-func gitCountCommits(fromRef, toRef string) (int, error) {
-	out, err := exec.Command(binGit, "rev-list", "--count", fromRef+".."+toRef).Output()
-	if err != nil {
-		return 0, err
-	}
-	return strconv.Atoi(strings.TrimSpace(string(out)))
-}
-
-// gitWorktreeCount returns the number of linked worktrees (excludes
-// the main worktree). Uses git worktree list --porcelain and counts
-// "worktree " lines beyond the first (main).
-func gitWorktreeCount() int {
-	out, _ := exec.Command(binGit, "worktree", "list", "--porcelain").Output() // zero count on error is acceptable
-	count := 0
-	for line := range strings.SplitSeq(string(out), "\n") {
-		if strings.HasPrefix(line, "worktree ") {
-			count++
-		}
-	}
-	// The first "worktree" entry is always the main worktree.
-	if count > 0 {
-		count--
-	}
-	return count
-}
-
 // parseBranchList parses the output of git branch --list or git tag --list.
 func parseBranchList(output string) []string {
 	var branches []string

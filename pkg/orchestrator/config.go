@@ -326,11 +326,6 @@ func readFileInto(field *string) error {
 	return nil
 }
 
-// defaultContextSources is empty because the standard document structure
-// is now loaded automatically by resolveStandardFiles. This field only
-// holds project-specific extras beyond the standard set.
-const defaultContextSources = ""
-
 func (c *Config) applyDefaults() {
 	if c.Project.BinaryDir == "" {
 		c.Project.BinaryDir = "bin"

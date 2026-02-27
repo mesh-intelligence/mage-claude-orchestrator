@@ -57,6 +57,7 @@ requirements:
       - R3.13: For each task, stitch must capture LOC after Claude and git diff stats
       - R3.14: For each task, stitch must clean up the worktree and delete the task branch
       - R3.15: For each task, stitch must record an InvocationRecord and close the task
+      - R3.16: worktreeBasePath must derive the repo name from git rev-parse --git-common-dir so the temp directory for task worktrees is identical whether stitch is invoked from the main repo root or from a git worktree; it must fall back to filepath.Base(os.Getwd()) if git is unavailable
 
   R4:
     title: Recovery
@@ -67,6 +68,7 @@ requirements:
       - R4.4: resetOrphanedIssues must find in_progress issues without corresponding task branches
       - R4.5: resetOrphanedIssues must reset orphaned issues to ready status
       - R4.6: Recovery must commit beads changes if any state was recovered
+      - R4.7: recoverStaleTasks and GeneratorResume must find stale task worktrees regardless of whether they are invoked from the main repo root or from a git worktree of the same repository
 
   R5:
     title: Prompt Templates

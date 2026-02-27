@@ -38,6 +38,9 @@ releases:
       - id: rel01.0-uc009-phase-context-files
         summary: Per-phase context specification files for measure and stitch
         status: done
+      - id: rel01.0-uc010-worktree-based-invocation
+        summary: Stable worktree base path when orchestrator is invoked from a git worktree
+        status: done
 
   - version: "02.0"
     name: VS Code Extension

@@ -10,8 +10,8 @@ import * as vscode from "vscode";
 
 // ---- Document type detection ----
 
-/** The four document types this module handles. */
-export type DocType = "prd" | "useCase" | "testSuite" | "engineering" | "unknown";
+/** The document types this module handles. "generic" is the catch-all for any YAML file. */
+export type DocType = "prd" | "useCase" | "testSuite" | "engineering" | "generic";
 
 /**
  * Detects the document type from the file path using path pattern matching.
@@ -34,7 +34,7 @@ export function detectDocType(filePath: string, doc?: unknown): DocType {
     if (keys.includes("introduction")) return "engineering";
   }
 
-  return "unknown";
+  return "generic";
 }
 
 // ---- Shared HTML helpers ----
@@ -376,6 +376,85 @@ export function renderEngineeringHtml(fileName: string, doc: EngineeringDoc): st
   return wrapHtml(title, body);
 }
 
+// ---- Generic YAML renderer ----
+
+function genericValue(v: unknown, depth: number): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return `  <pre>${escapeHtml(v.trimEnd())}</pre>\n`;
+  if (typeof v === "number" || typeof v === "boolean") return `  <p>${escapeHtml(String(v))}</p>\n`;
+  if (Array.isArray(v)) return genericArray(v, depth);
+  if (typeof v === "object") return genericObject(v as Record<string, unknown>, depth);
+  return `  <pre>${escapeHtml(JSON.stringify(v))}</pre>\n`;
+}
+
+function genericArray(arr: unknown[], depth: number): string {
+  if (arr.length === 0) return "";
+  if (arr.every(x => typeof x === "string" || typeof x === "number" || typeof x === "boolean")) {
+    return `  <ul>\n${arr.map(x => `    <li>${escapeHtml(String(x))}</li>\n`).join("")}  </ul>\n`;
+  }
+  const hl = Math.min(depth, 6);
+  const tag = `h${hl}`;
+  let html = "";
+  for (const item of arr) {
+    if (item !== null && typeof item === "object" && !Array.isArray(item)) {
+      const obj = item as Record<string, unknown>;
+      const name = obj.name ?? obj.title ?? obj.id;
+      if (name) html += `  <${tag}>${escapeHtml(String(name))}</${tag}>\n`;
+      const subSkip = new Set(["name", "title", "id"]);
+      for (const [k, v] of Object.entries(obj)) {
+        if (subSkip.has(k)) continue;
+        html += `  <p><strong>${escapeHtml(k)}:</strong></p>\n`;
+        html += genericValue(v, hl + 1);
+      }
+    } else {
+      html += `  <p>${escapeHtml(String(item))}</p>\n`;
+    }
+  }
+  return html;
+}
+
+function genericObject(obj: Record<string, unknown>, depth: number): string {
+  let html = "";
+  const hl = Math.min(depth, 6);
+  const tag = `h${hl}`;
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === null || v === undefined) continue;
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+      html += `  <p><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v))}</p>\n`;
+    } else {
+      html += `  <${tag}>${escapeHtml(k)}</${tag}>\n`;
+      html += genericValue(v, hl + 1);
+    }
+  }
+  return html;
+}
+
+/**
+ * Renders any YAML document as structured HTML by walking its top-level keys.
+ * Used as a catch-all for ARCHITECTURE.yaml, VISION.yaml, road-map.yaml, and
+ * any other YAML file that does not match a specific document type.
+ */
+export function renderGenericHtml(fileName: string, doc: unknown): string {
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+    return wrapHtml(fileName, `  <h1>${escapeHtml(fileName)}</h1>\n  <pre>${escapeHtml(String(doc ?? ""))}</pre>\n`);
+  }
+  const obj = doc as Record<string, unknown>;
+  const title = typeof obj.title === "string" ? obj.title : fileName;
+  const id = typeof obj.id === "string" ? obj.id : "";
+
+  let body = `  <h1>${escapeHtml(title)}</h1>\n`;
+  if (id) body += `  <div class="id-badge">${escapeHtml(id)}</div>\n`;
+
+  const skip = new Set(["id", "title"]);
+  for (const [k, v] of Object.entries(obj)) {
+    if (skip.has(k) || v === null || v === undefined) continue;
+    body += `  <h2>${escapeHtml(k)}</h2>\n`;
+    body += genericValue(v, 3);
+  }
+
+  return wrapHtml(title, body);
+}
+
 // ---- SpecPreview panel ----
 
 /**
@@ -422,10 +501,8 @@ export class SpecPreview {
         html = renderEngineeringHtml(fileName, doc as EngineeringDoc);
         break;
       default:
-        vscode.window.showErrorMessage(
-          `Cobbler: ${fileName} is not a recognized spec or engineering document`
-        );
-        return;
+        html = renderGenericHtml(fileName, doc);
+        break;
     }
 
     if (this.panel) {

@@ -114,7 +114,8 @@
       "editor/title": [
         {
           "command": "mageOrchestrator.previewSpec",
-          "when": "resourceExtname == .yaml && (resourcePath =~ /\\/docs\\/specs\\// || resourcePath =~ /\\/docs\\/engineering\\//)","group": "navigation"
+          "when": "resourceExtname == .yaml && resourcePath =~ /\\/docs\\//",
+          "group": "navigation"
         },
         {
           "command": "mageOrchestrator.previewConstitution",
@@ -125,7 +126,8 @@
       "explorer/context": [
         {
           "command": "mageOrchestrator.previewSpec",
-          "when": "resourceExtname == .yaml && (resourcePath =~ /\\/docs\\/specs\\// || resourcePath =~ /\\/docs\\/engineering\\//)","group": "navigation"
+          "when": "resourceExtname == .yaml && resourcePath =~ /\\/docs\\//",
+          "group": "navigation"
         },
         {
           "command": "mageOrchestrator.previewConstitution",

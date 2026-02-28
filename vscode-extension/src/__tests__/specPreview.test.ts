@@ -10,6 +10,7 @@ import {
   renderUseCaseHtml,
   renderTestSuiteHtml,
   renderEngineeringHtml,
+  renderGenericHtml,
   type PrdDoc,
   type UseCaseDoc,
   type TestSuiteDoc,
@@ -43,8 +44,8 @@ describe("detectDocType", () => {
     ).toBe("engineering");
   });
 
-  it("returns unknown for an unrecognized path with no doc", () => {
-    expect(detectDocType("/workspace/some/other/file.yaml")).toBe("unknown");
+  it("returns generic for an unrecognized path with no doc", () => {
+    expect(detectDocType("/workspace/some/other/file.yaml")).toBe("generic");
   });
 
   it("falls back to key detection for prd when path is non-standard", () => {
@@ -414,5 +415,100 @@ describe("renderEngineeringHtml", () => {
   it("omits introduction section when introduction is absent", () => {
     const html = renderEngineeringHtml("eng.yaml", { title: "T", sections: [] });
     expect(html).not.toContain("<h2>Introduction</h2>");
+  });
+});
+
+// ---- renderGenericHtml ----
+
+describe("renderGenericHtml", () => {
+  it("produces a DOCTYPE html document", () => {
+    const html = renderGenericHtml("ARCHITECTURE.yaml", { title: "Arch", id: "arch-1" });
+    expect(html).toContain("<!DOCTYPE html>");
+    expect(html).toContain("<html");
+  });
+
+  it("uses title field as h1 when present", () => {
+    const html = renderGenericHtml("ARCHITECTURE.yaml", { title: "Cobbler Architecture" });
+    expect(html).toContain("<h1>Cobbler Architecture</h1>");
+  });
+
+  it("falls back to file name when title is absent", () => {
+    const html = renderGenericHtml("ARCHITECTURE.yaml", { id: "arch" });
+    expect(html).toContain("<h1>ARCHITECTURE.yaml</h1>");
+  });
+
+  it("renders id as id-badge when present", () => {
+    const html = renderGenericHtml("f.yaml", { title: "T", id: "arch-cobbler" });
+    expect(html).toContain("arch-cobbler");
+  });
+
+  it("renders each top-level key as h2", () => {
+    const html = renderGenericHtml("f.yaml", {
+      title: "T",
+      overview: "The system overview.",
+    });
+    expect(html).toContain("<h2>overview</h2>");
+  });
+
+  it("renders string values as pre blocks", () => {
+    const html = renderGenericHtml("f.yaml", {
+      title: "T",
+      overview: "The system overview.",
+    });
+    expect(html).toContain("<pre>The system overview.</pre>");
+  });
+
+  it("renders arrays of strings as ul", () => {
+    const html = renderGenericHtml("f.yaml", {
+      title: "T",
+      tags: ["go", "yaml", "spec"],
+    });
+    expect(html).toContain("<ul>");
+    expect(html).toContain("<li>go</li>");
+    expect(html).toContain("<li>yaml</li>");
+  });
+
+  it("renders nested objects with sub-headings", () => {
+    const html = renderGenericHtml("ARCHITECTURE.yaml", {
+      title: "Arch",
+      overview: { summary: "High-level summary.", lifecycle: "Start -> finish." },
+    });
+    expect(html).toContain("<h2>overview</h2>");
+    expect(html).toContain("<strong>summary:</strong>");
+    expect(html).toContain("High-level summary.");
+  });
+
+  it("renders arrays of objects with named sub-sections", () => {
+    const html = renderGenericHtml("f.yaml", {
+      title: "T",
+      interfaces: [
+        { name: "Orchestrator", summary: "Entry point." },
+        { name: "Config", summary: "Settings." },
+      ],
+    });
+    expect(html).toContain("Orchestrator");
+    expect(html).toContain("Entry point.");
+    expect(html).toContain("Config");
+    expect(html).toContain("Settings.");
+  });
+
+  it("escapes HTML special characters in keys and values", () => {
+    const html = renderGenericHtml("<file>", { title: "<T>", note: "<b>bold</b>" });
+    expect(html).not.toContain("<T>");
+    expect(html).toContain("&lt;T&gt;");
+    expect(html).toContain("&lt;b&gt;bold&lt;/b&gt;");
+  });
+
+  it("handles non-object top-level doc gracefully", () => {
+    const html = renderGenericHtml("plain.yaml", "just a string");
+    expect(html).toContain("<h1>plain.yaml</h1>");
+    expect(html).toContain("just a string");
+  });
+
+  it("uses VS Code CSS variables", () => {
+    const html = renderGenericHtml("f.yaml", { title: "T" });
+    expect(html).toContain("var(--vscode-font-family)");
+    expect(html).toContain("var(--vscode-foreground)");
+    expect(html).toContain("var(--vscode-editor-background)");
   });
 });

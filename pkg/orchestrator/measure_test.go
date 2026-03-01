@@ -5,7 +5,12 @@ package orchestrator
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestValidateMeasureOutput_CodeP9InRange(t *testing.T) {
@@ -572,6 +577,436 @@ func TestMeasureReleasesConstraint_ReleasesTakePrecedence(t *testing.T) {
 	}
 	if contains(got, "00.5") {
 		t.Errorf("expected legacy release to be ignored when releases is set, got %q", got)
+	}
+}
+
+// --- truncateSHA ---
+
+func TestTruncateSHA_LongSHA(t *testing.T) {
+	t.Parallel()
+	got := truncateSHA("abc123def456789")
+	if got != "abc123de" {
+		t.Errorf("truncateSHA(long) = %q, want %q", got, "abc123de")
+	}
+}
+
+func TestTruncateSHA_ExactlyEight(t *testing.T) {
+	t.Parallel()
+	got := truncateSHA("12345678")
+	if got != "12345678" {
+		t.Errorf("truncateSHA(8 chars) = %q, want %q", got, "12345678")
+	}
+}
+
+func TestTruncateSHA_ShortSHA(t *testing.T) {
+	t.Parallel()
+	got := truncateSHA("abc")
+	if got != "abc" {
+		t.Errorf("truncateSHA(short) = %q, want %q", got, "abc")
+	}
+}
+
+func TestTruncateSHA_Empty(t *testing.T) {
+	t.Parallel()
+	got := truncateSHA("")
+	if got != "" {
+		t.Errorf("truncateSHA(\"\") = %q, want \"\"", got)
+	}
+}
+
+// --- appendMeasureLog ---
+
+func TestAppendMeasureLog_NewFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	issues := []proposedIssue{
+		{Index: 1, Title: "Task A", Description: "desc-a"},
+		{Index: 2, Title: "Task B", Description: "desc-b"},
+	}
+
+	appendMeasureLog(dir, issues)
+
+	data, err := os.ReadFile(filepath.Join(dir, "measure.yaml"))
+	if err != nil {
+		t.Fatalf("measure.yaml not created: %v", err)
+	}
+
+	var loaded []proposedIssue
+	if err := yaml.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("measure.yaml unmarshal: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Errorf("expected 2 issues in measure.yaml, got %d", len(loaded))
+	}
+}
+
+func TestAppendMeasureLog_AppendsToExisting(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	// Seed with one existing issue.
+	seed := []proposedIssue{{Index: 1, Title: "Existing"}}
+	seedData, _ := yaml.Marshal(seed)
+	os.WriteFile(filepath.Join(dir, "measure.yaml"), seedData, 0o644)
+
+	// Append a new issue.
+	appendMeasureLog(dir, []proposedIssue{{Index: 2, Title: "New"}})
+
+	data, err := os.ReadFile(filepath.Join(dir, "measure.yaml"))
+	if err != nil {
+		t.Fatalf("measure.yaml read: %v", err)
+	}
+	var loaded []proposedIssue
+	if err := yaml.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("measure.yaml unmarshal: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Errorf("expected 2 issues after append, got %d", len(loaded))
+	}
+	if loaded[0].Title != "Existing" || loaded[1].Title != "New" {
+		t.Errorf("unexpected order: %v", loaded)
+	}
+}
+
+func TestAppendMeasureLog_CorruptExistingStartsFresh(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	// Write corrupt YAML.
+	os.WriteFile(filepath.Join(dir, "measure.yaml"), []byte("{{{not yaml"), 0o644)
+
+	// Append should recover and write just the new issues.
+	appendMeasureLog(dir, []proposedIssue{{Index: 1, Title: "Fresh"}})
+
+	data, _ := os.ReadFile(filepath.Join(dir, "measure.yaml"))
+	var loaded []proposedIssue
+	if err := yaml.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("measure.yaml unmarshal: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].Title != "Fresh" {
+		t.Errorf("expected fresh start with 1 issue, got %v", loaded)
+	}
+}
+
+func TestAppendMeasureLog_EmptyNewIssues(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	// Seed with one issue, then append nothing.
+	seed := []proposedIssue{{Index: 1, Title: "Existing"}}
+	seedData, _ := yaml.Marshal(seed)
+	os.WriteFile(filepath.Join(dir, "measure.yaml"), seedData, 0o644)
+
+	appendMeasureLog(dir, nil)
+
+	data, _ := os.ReadFile(filepath.Join(dir, "measure.yaml"))
+	var loaded []proposedIssue
+	yaml.Unmarshal(data, &loaded)
+	if len(loaded) != 1 {
+		t.Errorf("expected 1 issue after appending nil, got %d", len(loaded))
+	}
+}
+
+// --- saveHistory ---
+
+func TestSaveHistory_WritesIssuesFile(t *testing.T) {
+	t.Parallel()
+	histDir := t.TempDir()
+	cobblerDir := t.TempDir()
+
+	o := New(Config{})
+	o.cfg.Cobbler.Dir = cobblerDir
+	o.cfg.Cobbler.HistoryDir = histDir
+
+	// Create the issues file that saveHistory reads.
+	issuesFile := filepath.Join(cobblerDir, "measure-test.yaml")
+	os.WriteFile(issuesFile, []byte("- title: test issue\n"), 0o644)
+
+	o.saveHistory("2026-02-28-12-00-00", []byte("raw output"), issuesFile)
+
+	// Check that the issues file was copied to history.
+	histIssues := filepath.Join(histDir, "2026-02-28-12-00-00-measure-issues.yaml")
+	data, err := os.ReadFile(histIssues)
+	if err != nil {
+		t.Fatalf("history issues file not created: %v", err)
+	}
+	if string(data) != "- title: test issue\n" {
+		t.Errorf("history issues content = %q, want %q", string(data), "- title: test issue\n")
+	}
+}
+
+func TestSaveHistory_NoHistoryDir(t *testing.T) {
+	t.Parallel()
+	o := New(Config{})
+	// HistoryDir is empty — saveHistory should be a no-op.
+	o.saveHistory("2026-02-28-12-00-00", []byte("output"), "/nonexistent/file")
+	// No panic is the assertion.
+}
+
+func TestSaveHistory_MissingIssuesFile(t *testing.T) {
+	t.Parallel()
+	histDir := t.TempDir()
+	o := New(Config{})
+	o.cfg.Cobbler.HistoryDir = histDir
+
+	// Call with nonexistent issues file — should not panic.
+	o.saveHistory("2026-02-28-12-00-00", []byte("output"), "/nonexistent/file.yaml")
+
+	// The issues file should not have been created.
+	matches, _ := filepath.Glob(filepath.Join(histDir, "*issues*"))
+	if len(matches) > 0 {
+		t.Errorf("expected no issues file in history, got %v", matches)
+	}
+}
+
+// --- buildMeasurePrompt ---
+
+func TestBuildMeasurePrompt_DefaultConfig(t *testing.T) {
+	t.Parallel()
+	o := New(Config{})
+
+	prompt, err := o.buildMeasurePrompt("", "", 1)
+	if err != nil {
+		t.Fatalf("buildMeasurePrompt() error = %v", err)
+	}
+	if !strings.Contains(prompt, "role:") {
+		t.Error("prompt missing 'role:' field")
+	}
+	if !strings.Contains(prompt, "planning_constitution:") {
+		t.Error("prompt missing 'planning_constitution:' field")
+	}
+	if !strings.Contains(prompt, "issue_format_constitution:") {
+		t.Error("prompt missing 'issue_format_constitution:' field")
+	}
+}
+
+func TestBuildMeasurePrompt_PlaceholderSubstitution(t *testing.T) {
+	t.Parallel()
+	o := New(Config{})
+	o.cfg.Cobbler.EstimatedLinesMin = 100
+	o.cfg.Cobbler.EstimatedLinesMax = 500
+	o.cfg.Cobbler.MaxRequirementsPerTask = 8
+
+	prompt, err := o.buildMeasurePrompt("", "", 3)
+	if err != nil {
+		t.Fatalf("buildMeasurePrompt() error = %v", err)
+	}
+
+	// The limit placeholder should be substituted with "3".
+	if !strings.Contains(prompt, "3") {
+		t.Error("prompt should contain the limit value")
+	}
+}
+
+func TestBuildMeasurePrompt_WithUserInput(t *testing.T) {
+	t.Parallel()
+	o := New(Config{})
+
+	prompt, err := o.buildMeasurePrompt("Focus on testing", "", 1)
+	if err != nil {
+		t.Fatalf("buildMeasurePrompt() error = %v", err)
+	}
+	if !strings.Contains(prompt, "Focus on testing") {
+		t.Error("prompt should contain user input")
+	}
+}
+
+func TestBuildMeasurePrompt_WithExistingIssues(t *testing.T) {
+	t.Parallel()
+	o := New(Config{})
+
+	existingIssues := `[{"number":42,"title":"Existing task","state":"open"}]`
+	prompt, err := o.buildMeasurePrompt("", existingIssues, 1)
+	if err != nil {
+		t.Fatalf("buildMeasurePrompt() error = %v", err)
+	}
+	if !strings.Contains(prompt, "Existing task") {
+		t.Error("prompt should contain existing issues context")
+	}
+}
+
+func TestBuildMeasurePrompt_InvalidTemplate(t *testing.T) {
+	t.Parallel()
+	cfg := Config{}
+	cfg.Cobbler.MeasurePrompt = "role: [unclosed bracket"
+	o := New(cfg)
+
+	_, err := o.buildMeasurePrompt("", "", 1)
+	if err == nil {
+		t.Error("expected error for invalid template, got nil")
+	}
+}
+
+func TestBuildMeasurePrompt_ReleasesConstraintAppended(t *testing.T) {
+	t.Parallel()
+	cfg := Config{}
+	cfg.Project.Releases = []string{"01.0", "02.0"}
+	o := New(cfg)
+
+	prompt, err := o.buildMeasurePrompt("", "", 1)
+	if err != nil {
+		t.Fatalf("buildMeasurePrompt() error = %v", err)
+	}
+	if !strings.Contains(prompt, "01.0, 02.0") {
+		t.Error("prompt should contain releases constraint")
+	}
+	if !strings.Contains(prompt, "MUST") {
+		t.Error("prompt should contain hard constraint keyword")
+	}
+}
+
+func TestBuildMeasurePrompt_GoldenExample(t *testing.T) {
+	t.Parallel()
+	cfg := Config{}
+	cfg.Cobbler.GoldenExample = "This is a golden example issue"
+	o := New(cfg)
+
+	prompt, err := o.buildMeasurePrompt("", "", 1)
+	if err != nil {
+		t.Fatalf("buildMeasurePrompt() error = %v", err)
+	}
+	if !strings.Contains(prompt, "golden example issue") {
+		t.Error("prompt should contain golden example")
+	}
+}
+
+// --- importIssuesImpl YAML parsing ---
+
+func TestImportIssuesImpl_NonexistentFile(t *testing.T) {
+	t.Parallel()
+	o := New(Config{})
+	_, err := o.importIssuesImpl("/nonexistent/file.yaml", "owner/repo", "gen", false)
+	if err == nil {
+		t.Error("expected error for nonexistent file")
+	}
+}
+
+func TestImportIssuesImpl_InvalidYAML(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	yamlFile := filepath.Join(dir, "bad.yaml")
+	os.WriteFile(yamlFile, []byte("{{{not valid yaml"), 0o644)
+
+	o := New(Config{})
+	_, err := o.importIssuesImpl(yamlFile, "owner/repo", "gen", false)
+	if err == nil {
+		t.Error("expected error for invalid YAML")
+	}
+	if !strings.Contains(err.Error(), "YAML") {
+		t.Errorf("error should mention YAML, got: %v", err)
+	}
+}
+
+func TestImportIssuesImpl_EmptyIssueList(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	yamlFile := filepath.Join(dir, "empty.yaml")
+	os.WriteFile(yamlFile, []byte("[]\n"), 0o644)
+
+	cfg := Config{}
+	cfg.Cobbler.Dir = dir
+	o := New(cfg)
+
+	// Empty list should not error — no issues to create, no GitHub calls.
+	ids, err := o.importIssuesImpl(yamlFile, "owner/repo", "gen", false)
+	if err != nil {
+		t.Fatalf("importIssuesImpl() error = %v", err)
+	}
+	if len(ids) != 0 {
+		t.Errorf("expected 0 ids for empty issue list, got %d", len(ids))
+	}
+}
+
+func TestImportIssuesImpl_ValidationRejectsInEnforcingMode(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	yamlFile := filepath.Join(dir, "issues.yaml")
+
+	// Create a code issue with only 1 requirement — violates P9 range 5-8.
+	issues := []proposedIssue{{
+		Index: 1,
+		Title: "Bad task",
+		Description: `deliverable_type: code
+requirements:
+  - id: R1
+    text: req1
+acceptance_criteria:
+  - id: AC1
+    text: ac1
+`,
+	}}
+	data, _ := yaml.Marshal(issues)
+	os.WriteFile(yamlFile, data, 0o644)
+
+	cfg := Config{}
+	cfg.Cobbler.Dir = dir
+	cfg.Cobbler.EnforceMeasureValidation = true
+	o := New(cfg)
+
+	_, err := o.importIssuesImpl(yamlFile, "owner/repo", "gen", false)
+	if err == nil {
+		t.Error("expected validation error in enforcing mode")
+	}
+	if !strings.Contains(err.Error(), "validation failed") {
+		t.Errorf("error should mention validation, got: %v", err)
+	}
+}
+
+func TestImportIssuesImpl_ValidationPassesWhenSkipped(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	yamlFile := filepath.Join(dir, "issues.yaml")
+
+	// Same invalid issue but with skipEnforcement=true.
+	issues := []proposedIssue{{
+		Index: 1,
+		Title: "Bad task",
+		Description: `deliverable_type: code
+requirements:
+  - id: R1
+    text: req1
+acceptance_criteria:
+  - id: AC1
+    text: ac1
+`,
+	}}
+	data, _ := yaml.Marshal(issues)
+	os.WriteFile(yamlFile, data, 0o644)
+
+	cfg := Config{}
+	cfg.Cobbler.Dir = dir
+	cfg.Cobbler.EnforceMeasureValidation = true
+	o := New(cfg)
+
+	// skipEnforcement=true should bypass validation errors.
+	// This will fail at createCobblerIssue (no real GitHub), but should NOT
+	// fail at validation.
+	ids, err := o.importIssuesImpl(yamlFile, "owner/repo", "gen", true)
+	if err != nil {
+		t.Fatalf("importIssuesImpl() with skipEnforcement should not return validation error, got: %v", err)
+	}
+	// ids will be empty because createCobblerIssue fails (no GitHub), but no error returned.
+	_ = ids
+}
+
+// --- MeasurePrompt (stdout entry point) ---
+
+func TestMeasurePrompt_ProducesOutput(t *testing.T) {
+	o := New(Config{})
+
+	// Redirect stdout to capture output.
+	oldStdout := os.Stdout
+	null, _ := os.Open(os.DevNull)
+	os.Stdout = null
+	defer func() {
+		os.Stdout = oldStdout
+		null.Close()
+	}()
+
+	err := o.MeasurePrompt()
+	if err != nil {
+		t.Errorf("MeasurePrompt() unexpected error: %v", err)
 	}
 }
 

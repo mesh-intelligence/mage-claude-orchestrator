@@ -396,7 +396,9 @@ func IssueHasLabel(t testing.TB, dir, issueNumber, label string) bool {
 }
 
 // SetupClaude extracts Claude credentials into the test repo and configures
-// the podman image in configuration.yaml.
+// the podman image in configuration.yaml. It also registers a cleanup that
+// closes any GitHub issues created for this test's generation so that
+// stale issues do not accumulate in the repository.
 func SetupClaude(t testing.TB, dir string) {
 	t.Helper()
 	if err := RunMage(t, dir, "credentials"); err != nil {
@@ -405,6 +407,54 @@ func SetupClaude(t testing.TB, dir string) {
 	WriteConfigOverride(t, dir, func(cfg *orchestrator.Config) {
 		cfg.Podman.Image = ClaudeImage
 	})
+	t.Cleanup(func() {
+		closeTestGenerationIssues(t, dir)
+	})
+}
+
+// closeTestGenerationIssues closes all open cobbler GitHub issues for the
+// test repo's current generation (branch). Called as a t.Cleanup to prevent
+// stale issues from accumulating in the issues repository after each test run.
+func closeTestGenerationIssues(t testing.TB, dir string) {
+	t.Helper()
+	repo := readIssuesRepo(t, dir)
+	if repo == "" {
+		return
+	}
+	branch := GitBranch(t, dir)
+	if branch == "" {
+		return
+	}
+	label := "cobbler-gen-" + branch
+	out, err := exec.Command("gh", "issue", "list",
+		"--repo", repo,
+		"--label", label,
+		"--state", "open",
+		"--json", "number",
+		"--limit", "200",
+	).Output()
+	if err != nil {
+		t.Logf("closeTestGenerationIssues: list: %v", err)
+		return
+	}
+	var issues []struct {
+		Number int `json:"number"`
+	}
+	if err := json.Unmarshal(out, &issues); err != nil {
+		t.Logf("closeTestGenerationIssues: parse: %v", err)
+		return
+	}
+	for _, iss := range issues {
+		if err := exec.Command("gh", "issue", "close",
+			"--repo", repo,
+			fmt.Sprintf("%d", iss.Number),
+		).Run(); err != nil {
+			t.Logf("closeTestGenerationIssues: close #%d: %v", iss.Number, err)
+		}
+	}
+	if len(issues) > 0 {
+		t.Logf("closeTestGenerationIssues: closed %d issue(s) for %s on %s", len(issues), repo, branch)
+	}
 }
 
 // WriteConfigOverride reads configuration.yaml in dir, applies modify, and

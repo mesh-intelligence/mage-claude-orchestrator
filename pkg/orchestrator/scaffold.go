@@ -22,6 +22,9 @@ import (
 //go:embed constitutions/design.yaml
 var designConstitution string
 
+//go:embed constitutions/testing.yaml
+var testingConstitution string
+
 // orchestratorModule is the Go module path for this orchestrator library.
 const orchestratorModule = "github.com/mesh-intelligence/cobbler-scaffold"
 
@@ -58,6 +61,7 @@ func (o *Orchestrator) Scaffold(targetDir, orchestratorRoot string) error {
 		"planning.yaml":  planningConstitution,
 		"execution.yaml": executionConstitution,
 		"go-style.yaml":  goStyleConstitution,
+		"testing.yaml":   testingConstitution,
 	}
 	for _, name := range slices.Sorted(maps.Keys(constitutionFiles)) {
 		p := filepath.Join(constitutionsDir, name)

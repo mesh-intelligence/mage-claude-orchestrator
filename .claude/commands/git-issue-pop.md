@@ -52,21 +52,23 @@ Present the proposed breakdown to the user for approval. Do not create anything 
 
 **Single-sub-issue rule:** If the natural breakdown is exactly one sub-issue, tell the user: "This fits in a single task — I'll work directly on the parent issue without creating a sub-issue." Proceed to Phase 4 (single-issue path) after approval.
 
-## Phase 4 -- Create Branch and Sub-Issues
+## Phase 4 -- Create Worktree and Sub-Issues
 
 After user approval:
 
-1. Ensure `main` is clean and up to date:
-   ```
+1. Ensure the main repo is on `main` (the worktree keeps main untouched):
+
+   ```bash
    git checkout main
-   git stash --include-untracked  # if needed
    ```
 
-2. Create a feature branch from main:
+2. Create a git worktree with a new branch:
+
+   ```bash
+   git worktree add ../gh-<number>-<slug> -b gh-<number>-<slug>
    ```
-   git checkout -b gh-<number>-<slug>
-   ```
-   Where `<slug>` is a short kebab-case summary of the issue title (e.g. `gh-42-add-scaffold-validation`).
+   The worktree lives at `../gh-<number>-<slug>` (sibling of the current repo directory).
+   All subsequent work happens inside this worktree. Record the path: `WT=../gh-<number>-<slug>`
 
 ### If there are 2 or more sub-issues
 
@@ -87,9 +89,10 @@ After user approval:
    Get the database ID with: `gh api repos/<owner>/<repo>/issues/<sub-number> --jq '.id'`
    Repeat for each sub-issue. The parent issue will show a progress checklist.
 
-3. Commit the feature branch:
+3. Commit an initial marker in the worktree:
    ```bash
-   git commit --allow-empty -m "Pop GH-<number>: <title> into feature branch
+   cd ../gh-<number>-<slug>
+   git commit --allow-empty -m "Pop GH-<number>: <title> into worktree
 
    Sub-issues: <comma-separated list of #N>"
    ```
@@ -108,9 +111,10 @@ After user approval:
    gh issue edit <number> --repo <owner>/<repo> --add-assignee @me
    ```
 
-2. Commit the feature branch:
+2. Commit an initial marker in the worktree:
    ```bash
-   git commit --allow-empty -m "Pop GH-<number>: <title> into feature branch"
+   cd ../gh-<number>-<slug>
+   git commit --allow-empty -m "Pop GH-<number>: <title> into worktree"
    ```
 
 3. Push the branch:
@@ -120,10 +124,14 @@ After user approval:
 
 4. Report the parent issue URL to the user. Work proceeds directly on the parent issue — no sub-issue tracking needed.
 
-All subsequent `/do-work` happens on this branch. Before starting work, verify you are on the correct branch:
-```
+All subsequent `/do-work` happens inside the worktree at `../gh-<number>-<slug>`. Before starting work, verify the worktree branch:
+
+```bash
+cd ../gh-<number>-<slug>
 git branch --show-current  # should show gh-<number>-<slug>
 ```
+
+The main repo stays on `main` throughout.
 
 ## Phase 5 -- Open a Pull Request
 
@@ -186,14 +194,15 @@ For the **multi-sub-issue path**, trigger Phase 5 when ALL sub-issues on the par
    gh pr merge --repo <owner>/<repo> --merge --delete-branch
    ```
 
-7. Return to main and pull the merged changes:
+7. Pull the merged changes into main (the main repo is already on `main`):
    ```bash
-   git checkout main
    git pull origin main
    ```
 
-8. Delete the local feature branch (now merged):
+8. Remove the worktree and delete the local branch:
+
    ```bash
+   git worktree remove ../gh-<number>-<slug>
    git branch -d gh-<number>-<slug>
    ```
 

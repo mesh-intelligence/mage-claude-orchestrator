@@ -213,16 +213,17 @@ If it reaches 0, perform a **thorough code inspection**:
 - Always push after every commit: `git push`
 - **Update road-map.yaml** when use cases are completed
 
-## Branch Discipline
+## Worktree Discipline
 
-1. **Verify you are on the correct feature branch** before starting work:
+1. **Verify you are inside the correct worktree** before starting work:
 
    ```bash
+   pwd                        # should be ../gh-<number>-<slug>
    git branch --show-current  # should show gh-<number>-<slug>
    ```
 
-   If you are on `main`, switch to the feature branch first.
+   If you are in the main repo directory, `cd ../gh-<number>-<slug>` first. The main repo stays on `main`.
 
-2. **All commits go to the feature branch**, not `main`. Push after every commit.
+2. **All commits go to the worktree branch** (run `git add` and `git commit` from inside the worktree). Push after every commit.
 
 3. **When the open sub-issue count reaches 0**, execute `/git-issue-pop` Phase 5 automatically.

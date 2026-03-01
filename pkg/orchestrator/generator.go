@@ -207,7 +207,7 @@ func (o *Orchestrator) GeneratorStart() error {
 		return fmt.Errorf("resetting Go sources: %w", err)
 	}
 
-	// Squash intermediate commits (beads reset/init) into one clean commit.
+	// Squash intermediate commits into one clean commit.
 	logf("generator:start: squashing into single commit")
 	if err := gitResetSoft(branchSHA); err != nil {
 		return fmt.Errorf("squashing start commits: %w", err)

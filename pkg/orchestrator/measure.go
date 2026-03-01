@@ -133,7 +133,7 @@ func (o *Orchestrator) RunMeasure() error {
 	logf("locBefore prod=%d test=%d", locBefore.Production, locBefore.Test)
 
 	// Iterative measure: call Claude once per issue with limit=1.
-	// Between calls, import the result into beads and refresh the issue list
+	// Between calls, import the result into GitHub Issues and refresh the issue list
 	// so subsequent calls see existing issues and avoid duplicates.
 	totalIssues := o.cfg.Cobbler.MaxMeasureIssues
 	var allCreatedIDs []string

@@ -48,7 +48,7 @@ func (o *Orchestrator) captureLOC() LocSnapshot {
 	return LocSnapshot{Production: rec.GoProdLOC, Test: rec.GoTestLOC}
 }
 
-// InvocationRecord is the JSON blob recorded as a beads comment after
+// InvocationRecord is the JSON blob recorded as a GitHub issue comment after
 // every Claude invocation.
 type InvocationRecord struct {
 	Caller    string       `json:"caller"`

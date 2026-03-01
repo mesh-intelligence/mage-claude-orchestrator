@@ -79,10 +79,10 @@ func logf(format string, args ...any) {
 
 // --- Top-level targets ---
 
-// Init initializes the project (beads).
+// Init initializes the project.
 func Init() error { return newOrch().Init() }
 
-// Reset performs a full reset: cobbler, generator, beads.
+// Reset performs a full reset: cobbler and generator.
 func Reset() error { return newOrch().FullReset() }
 
 // Build compiles the project binary.

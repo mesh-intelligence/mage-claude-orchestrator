@@ -105,9 +105,6 @@ type CobblerConfig struct {
 	// Dir is the cobbler scratch directory (default ".cobbler/").
 	Dir string `yaml:"dir"`
 
-	// BeadsDir is the beads database directory (default ".beads/").
-	BeadsDir string `yaml:"beads_dir"`
-
 	// IssuesRepo is the GitHub repository (owner/repo) where orchestrator
 	// issues are created. If empty, detectGitHubRepo derives it from the
 	// target project's git remote or go.mod module path. Set this in
@@ -354,9 +351,6 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Generation.Prefix == "" {
 		c.Generation.Prefix = "generation-"
-	}
-	if c.Cobbler.BeadsDir == "" {
-		c.Cobbler.BeadsDir = dirBeads + "/"
 	}
 	if c.Cobbler.Dir == "" {
 		c.Cobbler.Dir = dirCobbler + "/"

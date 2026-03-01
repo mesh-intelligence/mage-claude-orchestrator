@@ -724,12 +724,13 @@ func (o *Orchestrator) GeneratorList() error {
 // Uses Config.GenerationBranch as the target.
 func (o *Orchestrator) GeneratorSwitch() error {
 	target := o.cfg.Generation.Branch
+	baseBranch := o.cfg.Cobbler.BaseBranch
 	if target == "" {
-		return fmt.Errorf("set generation.branch in configuration.yaml\nAvailable branches: %s, main", strings.Join(o.listGenerationBranches(), ", "))
+		return fmt.Errorf("set generation.branch in configuration.yaml\nAvailable branches: %s, %s", strings.Join(o.listGenerationBranches(), ", "), baseBranch)
 	}
 
-	if target != "main" && !strings.HasPrefix(target, o.cfg.Generation.Prefix) {
-		return fmt.Errorf("not a generation branch or main: %s", target)
+	if target != baseBranch && !strings.HasPrefix(target, o.cfg.Generation.Prefix) {
+		return fmt.Errorf("not a generation branch or %s: %s", baseBranch, target)
 	}
 	if !gitBranchExists(target) {
 		return fmt.Errorf("branch does not exist: %s", target)
@@ -756,8 +757,9 @@ func (o *Orchestrator) GeneratorSwitch() error {
 func (o *Orchestrator) GeneratorReset() error {
 	logf("generator:reset: beginning")
 
-	if err := ensureOnBranch("main"); err != nil {
-		return fmt.Errorf("switching to main: %w", err)
+	baseBranch := o.cfg.Cobbler.BaseBranch
+	if err := ensureOnBranch(baseBranch); err != nil {
+		return fmt.Errorf("switching to %s: %w", baseBranch, err)
 	}
 
 	wtBase := worktreeBasePath()
@@ -777,10 +779,10 @@ func (o *Orchestrator) GeneratorReset() error {
 				logf("generator:reset: close issues warning for %s: %v", gb, err)
 			}
 		}
-		// Close issues created on main (handles repos where measure ran on main,
-		// such as test repos that run cobbler:measure without a generation branch).
-		if err := closeGenerationIssues(ghRepo, "main"); err != nil {
-			logf("generator:reset: close issues warning for main: %v", err)
+		// Close issues created on the base branch (handles repos where measure ran on the
+		// base branch, such as test repos that run cobbler:measure without a generation branch).
+		if err := closeGenerationIssues(ghRepo, baseBranch); err != nil {
+			logf("generator:reset: close issues warning for %s: %v", baseBranch, err)
 		}
 	}
 
@@ -814,7 +816,7 @@ func (o *Orchestrator) GeneratorReset() error {
 	o.cleanupDirs()
 
 	logf("generator:reset: seeding Go sources and reinitializing go.mod")
-	if err := o.seedFiles("main"); err != nil {
+	if err := o.seedFiles(baseBranch); err != nil {
 		return fmt.Errorf("seeding files: %w", err)
 	}
 	if err := o.reinitGoModule(); err != nil {
@@ -825,7 +827,7 @@ func (o *Orchestrator) GeneratorReset() error {
 	_ = gitStageAll()                                                  // best-effort; commit below handles empty index
 	_ = gitCommitAllowEmpty("Generator reset: return to clean state") // best-effort; reset is complete regardless
 
-	logf("generator:reset: done, only main branch remains")
+	logf("generator:reset: done, only %s branch remains", baseBranch)
 	return nil
 }
 

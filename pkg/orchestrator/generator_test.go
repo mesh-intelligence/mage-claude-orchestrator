@@ -917,6 +917,7 @@ func TestGeneratorSwitch_SwitchToMain(t *testing.T) {
 
 	o := &Orchestrator{cfg: Config{
 		Generation: GenerationConfig{Prefix: "generation-", Branch: "main"},
+		Cobbler:    CobblerConfig{BaseBranch: "main"},
 	}}
 
 	if err := o.GeneratorSwitch(); err != nil {
@@ -926,6 +927,29 @@ func TestGeneratorSwitch_SwitchToMain(t *testing.T) {
 	current, _ := gitCurrentBranch()
 	if current != "main" {
 		t.Errorf("current branch = %q, want %q", current, "main")
+	}
+}
+
+func TestGeneratorReset_UsesConfiguredBaseBranch(t *testing.T) {
+	initTestGitRepo(t)
+
+	// Configure a non-existent base branch; GeneratorReset must attempt to switch
+	// to it (not to the hardcoded string "main") and return an error that names it.
+	o := &Orchestrator{cfg: Config{
+		Generation: GenerationConfig{Prefix: "generation-"},
+		Cobbler:    CobblerConfig{BaseBranch: "trunk", Dir: ".cobbler/"},
+		Project:    ProjectConfig{MagefilesDir: "magefiles"},
+	}}
+
+	err := o.GeneratorReset()
+	if err == nil {
+		t.Fatal("GeneratorReset() expected error when configured base branch 'trunk' does not exist")
+	}
+	if !strings.Contains(err.Error(), "trunk") {
+		t.Errorf("error = %q, want to mention configured base branch 'trunk'", err.Error())
+	}
+	if strings.Contains(err.Error(), "switching to main") {
+		t.Errorf("error = %q, must not say 'switching to main' when BaseBranch is 'trunk'", err.Error())
 	}
 }
 

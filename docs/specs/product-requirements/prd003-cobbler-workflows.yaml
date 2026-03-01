@@ -143,6 +143,17 @@ requirements:
       - R10.6: buildProjectContext must include the AnalysisDoc content when analysis.yaml is present so Claude sees current project health in both measure and stitch prompts
       - R10.7: Errors during RunPreCycleAnalysis must be logged and must not block the cycle; the analysis is advisory
 
+  R11:
+    title: Defect Routing
+    items:
+      - R11.1: AnalysisDoc must include a Defects []string field that holds schema errors and constitution drift findings from AnalyzeResult; these must be separate from ConsistencyDetails
+      - R11.2: RunPreCycleAnalysis must populate Defects from AnalyzeResult.SchemaErrors and AnalyzeResult.ConstitutionDrift, and must exclude those findings from ConsistencyDetails
+      - R11.3: RunMeasure must read Defects from the AnalysisDoc after RunPreCycleAnalysis and file each defect as a GitHub bug issue in the target repo
+      - R11.4: The target repo is resolved by checking project.target_repo in Config first; if empty, by stripping "github.com/" from project.module_path; if neither yields a non-empty value, defect filing is skipped with a log warning
+      - R11.5: Filed defect issues must use the "bug" label and must include the defect detail string (which already contains the file path and error) in the issue body
+      - R11.6: Defect filing is best-effort; errors from gh issue create are logged and must not block the measure cycle
+      - R11.7: Defects must not be passed to Claude in the measure prompt; the Defects field in AnalysisDoc must be omitted from ConsistencyDetails so Claude does not see or act on them
+
 non_goals:
   - This PRD does not define the generation lifecycle (see prd002)
   - This PRD does not define the prompt content or Claude behavior expectations
@@ -156,3 +167,4 @@ acceptance_criteria:
   - Custom prompt templates override embedded defaults
   - Measure and stitch each read their own context file at invocation time when present
   - Projects without context files use current behavior unchanged
+  - Schema errors and constitution drift are filed as bug issues in the target repo and excluded from the measure prompt

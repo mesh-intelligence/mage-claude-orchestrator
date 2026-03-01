@@ -22,8 +22,16 @@ type AnalysisDoc struct {
 	ConsistencyErrors int `yaml:"consistency_errors"`
 
 	// ConsistencyDetails lists individual consistency issues (orphaned PRDs,
-	// broken touchpoints, schema errors, etc.).
+	// broken touchpoints, etc.). Schema errors and constitution drift are
+	// excluded — they appear in Defects instead (prd003 R11).
 	ConsistencyDetails []string `yaml:"consistency_details,omitempty"`
+
+	// Defects holds schema errors and constitution drift findings from
+	// AnalyzeResult. These are bugs in the target repo's own files, not
+	// orchestrator workflow issues. RunMeasure routes them to the target
+	// repo's GitHub issue tracker and excludes them from the measure prompt
+	// (prd003 R11.1, R11.7).
+	Defects []string `yaml:"defects,omitempty"`
 
 	// CodeStatus holds per-release and per-use-case implementation status.
 	CodeStatus *CodeStatusReport `yaml:"code_status,omitempty"`
@@ -39,7 +47,9 @@ func (a *AnalysisDoc) totalIssues() int {
 }
 
 // collectConsistencyDetails flattens an AnalyzeResult into a single list
-// of human-readable issue strings.
+// of human-readable issue strings for Claude's project context. Schema errors
+// and constitution drift are excluded — they are routed to the target repo as
+// defects via collectDefects (prd003 R11.2, R11.7).
 func collectConsistencyDetails(r *AnalyzeResult) []string {
 	var details []string
 	for _, v := range r.OrphanedPRDs {
@@ -57,12 +67,6 @@ func collectConsistencyDetails(r *AnalyzeResult) []string {
 	for _, v := range r.UseCasesNotInRoadmap {
 		details = append(details, "use case not in roadmap: "+v)
 	}
-	for _, v := range r.SchemaErrors {
-		details = append(details, "schema error: "+v)
-	}
-	for _, v := range r.ConstitutionDrift {
-		details = append(details, "constitution drift: "+v)
-	}
 	for _, v := range r.BrokenCitations {
 		details = append(details, "broken citation: "+v)
 	}
@@ -70,6 +74,21 @@ func collectConsistencyDetails(r *AnalyzeResult) []string {
 		details = append(details, "invalid release: "+v)
 	}
 	return details
+}
+
+// collectDefects extracts schema errors and constitution drift from an
+// AnalyzeResult and returns them as labeled defect strings. These are bugs
+// in the target repo's own files and are filed as GitHub issues in the
+// target repo rather than injected into the measure prompt (prd003 R11.1).
+func collectDefects(r *AnalyzeResult) []string {
+	var defects []string
+	for _, v := range r.SchemaErrors {
+		defects = append(defects, "schema error: "+v)
+	}
+	for _, v := range r.ConstitutionDrift {
+		defects = append(defects, "constitution drift: "+v)
+	}
+	return defects
 }
 
 // RunPreCycleAnalysis performs cross-artifact consistency checks and code
@@ -89,6 +108,11 @@ func (o *Orchestrator) RunPreCycleAnalysis() {
 		details := collectConsistencyDetails(&result)
 		doc.ConsistencyErrors = len(details)
 		doc.ConsistencyDetails = details
+		defects := collectDefects(&result)
+		doc.Defects = defects
+		if len(defects) > 0 {
+			logf("precycle: %d defect(s) routed to target repo (excluded from measure prompt)", len(defects))
+		}
 	}
 
 	// Code implementation status.

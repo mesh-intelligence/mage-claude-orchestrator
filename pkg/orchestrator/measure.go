@@ -112,6 +112,19 @@ func (o *Orchestrator) RunMeasure() error {
 	// Run pre-cycle analysis so the measure prompt sees current project state.
 	o.RunPreCycleAnalysis()
 
+	// Route target-repo defects to the target repo (prd003 R11).
+	// Schema errors and constitution drift are bugs in the target project's
+	// files; filing them as GitHub issues prevents Claude from proposing them
+	// as measure tasks, which would fail validation and block the cycle.
+	if analysis := loadAnalysisDoc(o.cfg.Cobbler.Dir); analysis != nil && len(analysis.Defects) > 0 {
+		if targetRepo := resolveTargetRepo(o.cfg); targetRepo != "" {
+			logf("measure: filing %d defect(s) as bug issues in %s", len(analysis.Defects), targetRepo)
+			fileTargetRepoDefects(targetRepo, analysis.Defects)
+		} else {
+			logf("measure: no target repo configured; skipping %d defect(s)", len(analysis.Defects))
+		}
+	}
+
 	// Clean up old measure temp files.
 	matches, _ := filepath.Glob(o.cfg.Cobbler.Dir + "measure-*.yaml") // empty list on error is acceptable
 	if len(matches) > 0 {

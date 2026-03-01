@@ -464,3 +464,47 @@ func goModModulePath(repoRoot string) string {
 	}
 	return ""
 }
+
+// resolveTargetRepo returns the GitHub owner/repo string for the project being
+// developed. It checks cfg.Project.TargetRepo first; if empty it strips
+// "github.com/" from cfg.Project.ModulePath. Returns "" if neither yields a
+// non-empty value. Intentionally separate from detectGitHubRepo to avoid
+// cobbler.issues_repo contaminating target resolution (prd003 R11.4, D2).
+func resolveTargetRepo(cfg Config) string {
+	if cfg.Project.TargetRepo != "" {
+		return cfg.Project.TargetRepo
+	}
+	if strings.HasPrefix(cfg.Project.ModulePath, "github.com/") {
+		return strings.TrimPrefix(cfg.Project.ModulePath, "github.com/")
+	}
+	return ""
+}
+
+// fileTargetRepoDefects files each defect as a GitHub bug issue in repo.
+// Errors are logged but do not fail the caller — filing is best-effort
+// (prd003 R11.5, R11.6). If repo is empty the call is a no-op with a
+// warning log (prd003 R11.7).
+func fileTargetRepoDefects(repo string, defects []string) {
+	if repo == "" {
+		logf("fileTargetRepoDefects: no target repo configured; skipping %d defect(s)", len(defects))
+		return
+	}
+	for _, defect := range defects {
+		title := "Defect: " + defect
+		if len(title) > 68 { // keep title under ~70 chars
+			title = title[:68] + "..."
+		}
+		body := "## Defect detected by cobbler:measure\n\n" + defect
+		out, err := exec.Command(binGh, "issue", "create",
+			"--repo", repo,
+			"--title", title,
+			"--body", body,
+			"--label", "bug",
+		).CombinedOutput()
+		if err != nil {
+			logf("fileTargetRepoDefects: gh issue create failed for %q: %v (output: %s)", defect, err, string(out))
+			continue
+		}
+		logf("fileTargetRepoDefects: filed defect issue in %s: %s", repo, strings.TrimSpace(string(out)))
+	}
+}

@@ -75,6 +75,13 @@ type ProjectConfig struct {
 	// An empty list disables release-based filtering and includes all files.
 	Releases []string `yaml:"releases"`
 
+	// TargetRepo is the GitHub repository (owner/repo) of the project being
+	// analyzed and developed. It is used to file defect issues (schema errors,
+	// constitution drift) discovered by RunPreCycleAnalysis in the target repo
+	// rather than the orchestrator's own issues repo (see prd003 R11).
+	// If empty, resolveTargetRepo derives it from ModulePath.
+	TargetRepo string `yaml:"target_repo"`
+
 	// SeedFiles maps relative file paths to template source file paths.
 	// During LoadConfig, each source path is read and its content replaces
 	// the map value. During generator:start and generator:reset the content

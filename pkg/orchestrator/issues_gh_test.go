@@ -256,3 +256,48 @@ func TestGoModModulePath_NoModuleLine(t *testing.T) {
 		t.Errorf("goModModulePath = %q, want empty for go.mod without module line", got)
 	}
 }
+
+// --- resolveTargetRepo ---
+
+func TestResolveTargetRepo_ExplicitTargetRepo(t *testing.T) {
+	t.Parallel()
+	cfg := Config{}
+	cfg.Project.TargetRepo = "owner/target-project"
+	cfg.Project.ModulePath = "github.com/owner/other" // ignored when TargetRepo set
+
+	got := resolveTargetRepo(cfg)
+	if got != "owner/target-project" {
+		t.Errorf("got %q, want %q", got, "owner/target-project")
+	}
+}
+
+func TestResolveTargetRepo_FallbackToModulePath(t *testing.T) {
+	t.Parallel()
+	cfg := Config{}
+	cfg.Project.ModulePath = "github.com/acme/sdd-hello-world"
+
+	got := resolveTargetRepo(cfg)
+	if got != "acme/sdd-hello-world" {
+		t.Errorf("got %q, want %q", got, "acme/sdd-hello-world")
+	}
+}
+
+func TestResolveTargetRepo_NonGitHub(t *testing.T) {
+	t.Parallel()
+	cfg := Config{}
+	cfg.Project.ModulePath = "gitlab.com/org/project"
+
+	got := resolveTargetRepo(cfg)
+	if got != "" {
+		t.Errorf("got %q, want empty for non-github module path", got)
+	}
+}
+
+func TestResolveTargetRepo_Empty(t *testing.T) {
+	t.Parallel()
+	cfg := Config{}
+	got := resolveTargetRepo(cfg)
+	if got != "" {
+		t.Errorf("got %q, want empty when nothing configured", got)
+	}
+}

@@ -30,12 +30,12 @@ overview:
 
     Measure reads the project state (documentation, existing issues, source code) and invokes
     Claude with a prompt template. Claude proposes tasks as a YAML list. We import these tasks
-    into beads with dependency wiring.
+    as GitHub issues labelled by generation.
 
-    Stitch picks ready tasks from beads one at a time. For each task: create a git worktree
+    Stitch picks ready GitHub issues one at a time. For each task: create a git worktree
     on a task branch, invoke Claude with the task description and full project context, commit
     Claude's changes (the orchestrator manages all git operations), merge the task branch back,
-    record metrics, close the task. Task branches use the pattern task/{baseBranch}-{issueID}.
+    record metrics, close the issue. Task branches use the pattern task/{baseBranch}-{issueID}.
 
     Each stitch task runs in a separate git worktree. This prevents concurrent tasks from
     interfering with each other and keeps the generation branch clean. The worktree lives in
@@ -44,6 +44,18 @@ overview:
 
     Recovery handles interrupted runs. On resume, we scan for stale task branches, remove
     them, reset their issues to ready, and continue.
+
+    The system supports two paths for turning a GitHub issue into merged code. The automated
+    path uses the generation lifecycle: `mage generator:start` creates the generation branch,
+    `mage generator:run` drives measure+stitch cycles autonomously until all issues are closed,
+    and `mage generator:stop` merges the result back to the base branch. This path suits
+    well-specified epics where human review between tasks is not needed.
+
+    The interactive path uses the /git-issue-pop command: Claude reads the parent issue and
+    decomposes it into GitHub sub-issues, a worktree is created for the epic branch, and the
+    agent executes each sub-issue with /do-work. This path suits tasks where human review of
+    the decomposition or intermediate work is valuable. Both paths share the same GitHub issue
+    model and git worktree isolation.
 
 interfaces:
   - name: Orchestrator and Config
@@ -63,10 +75,10 @@ interfaces:
     operations:
       - "New(cfg Config) *Orchestrator: construct with explicit config"
       - "NewFromFile(path string) (*Orchestrator, error): construct from configuration.yaml"
-      - "GeneratorStart(): tag main, create generation branch, reset sources (prd002)"
+      - "GeneratorStart(): tag base branch, create generation branch, reset sources unless preserve_sources is true (prd002)"
       - "GeneratorRun(): run measure+stitch cycles until all issues are closed (prd002)"
       - "GeneratorResume(): recover and continue interrupted run (prd002)"
-      - "GeneratorStop(): merge generation into main, tag, clean up (prd002)"
+      - "GeneratorStop(): merge generation into base branch, tag, clean up; skips source reset when preserve_sources is true (prd002)"
       - "GeneratorReset(): destroy all generations, return to clean main (prd002)"
       - "GeneratorList(): show active and past generations (prd002)"
       - "GeneratorSwitch(): switch between generation branches (prd002)"
@@ -79,11 +91,9 @@ interfaces:
       - "BuildImage(): build podman container image from embedded Dockerfile"
       - "Build(): go build the consuming project binary"
       - "Analyze(): cross-artifact consistency checking"
-      - "Init(): initialize beads (prd001)"
-      - "FullReset(): reset cobbler, generator, and beads (prd001)"
+      - "Init(): initialize project (prd001)"
+      - "FullReset(): reset cobbler and generator (prd001)"
       - "CobblerReset(): remove scratch directory (prd003)"
-      - "BeadsInit(): initialize beads database (prd001)"
-      - "BeadsReset(): reset beads database (prd001)"
 
   - name: Prompt Templates
     summary: |
@@ -111,12 +121,14 @@ components:
   - name: Generator
     responsibility: |
       Manages the generation lifecycle. Creates generation branches, runs cycles, merges
-      results to main, handles resume from interrupted runs. Uses git tags to mark lifecycle
-      events. Resets Go sources and re-seeds template files on start and reset.
+      results to the base branch, handles resume from interrupted runs. Uses git tags to mark
+      lifecycle events. Resets Go sources and re-seeds template files on start and reset,
+      unless generation.preserve_sources is true (library mode).
     capabilities:
       - Start, run, resume, stop, reset, list, switch generation branches
       - Tag lifecycle events on git
-      - Re-seed template files at start and reset
+      - Re-seed template files at start and reset (skipped in library mode)
+      - "Library mode: preserve Go source files when preserve_sources is true (prd002 R10)"
     references:
       - prd002-generation-lifecycle
 
@@ -168,12 +180,12 @@ components:
 
   - name: Commands
     responsibility: |
-      Wrapper functions for external tools. Over 50 functions wrapping git, beads (bd),
-      and Go CLI commands. Centralizes binary names as constants and provides structured
-      access to command output.
+      Wrapper functions for external tools. Functions wrapping git, GitHub CLI (gh), and
+      Go CLI commands. Centralizes binary names as constants and provides structured access
+      to command output.
     capabilities:
       - Git operations (branch, worktree, tag, merge, diff)
-      - Beads operations (ready, show, update, close, comments)
+      - GitHub CLI operations (issue create, close, label, list via REST API)
       - Go toolchain operations (build, vet)
     references:
       - prd001-orchestrator-core
@@ -250,7 +262,7 @@ components:
       - Load and marshal vision, architecture, specifications, roadmap, PRDs, use cases, test suites
       - Load engineering guidelines and constitutions
       - Load Go source files from configured directories
-      - Parse existing issues from beads into structured format
+      - Parse existing GitHub issues into structured format
       - Assemble all components into a single YAML string for prompt injection
       - Load per-phase context override files (PhaseContext) at invocation time
     references:
@@ -440,17 +452,20 @@ design_decisions:
       - "Running Claude as bare binary on host: simpler but provides no isolation, and environment differences are harder to debug"
 
   - id: 5
-    title: Beads for issue tracking
+    title: GitHub Issues for task tracking
     decision: |
-      We use the beads git-backed issue tracker because it stores issues as JSONL files
-      tracked by git. Task state travels with the generation branch and is recoverable
-      from any commit.
+      We use GitHub Issues as the task tracker. Each generation's tasks are GitHub issues
+      labelled with a generation-specific label (cobbler-gen-{branch}). Status is encoded
+      as additional labels (cobbler-ready, cobbler-in-progress). The gh CLI manages all
+      issue operations via the GitHub REST API.
     benefits:
-      - No network access required
-      - Task state is part of the git history
-      - Recovery is possible from any commit
+      - Task state is visible on the GitHub issue page without any local tooling
+      - No external binary dependency beyond gh, which is standard in GitHub workflows
+      - Issue history and comments are preserved in GitHub's audit trail
+      - Parent issues can track sub-issues via GitHub's native sub-issue API
     alternatives_rejected:
-      - "External issue trackers (GitHub Issues, Jira): require network access and do not travel with the branch"
+      - "Beads (bd CLI): external binary not available on all machines; SQLite state is local and not visible on GitHub"
+      - "File-based issue directories: no UI, harder to review during code review"
 
   - id: 6
     title: Embedded prompt templates with override
@@ -494,6 +509,38 @@ design_decisions:
       - "Scattered markdown rule files: verbose prose, no phase separation, all rules injected into every prompt"
       - "Single monolithic constitution: measure agents see coding standards they don't need, stitch agents see format schemas they don't need"
 
+  - id: 9
+    title: Library mode via preserve_sources
+    decision: |
+      We add a generation.preserve_sources boolean to Config. When true, GeneratorStart skips
+      deleteGoFiles and reinitGoModule, and GeneratorStop skips cleanGoSources on the base
+      branch. The generation branch is still created and tagged; measure and stitch cycles
+      run normally; the merge proceeds. Only the source reset steps are omitted.
+    benefits:
+      - Repos where the Go source is the product (such as cobbler-scaffold itself) can use
+        the generator lifecycle without destroying their library code
+      - The flag is additive; all existing repos keep the default (false) and are unaffected
+      - Library repos can run mage generator:run for autonomous task execution alongside
+        the interactive /git-issue-pop workflow
+    alternatives_rejected:
+      - "Separate generator variant for library repos: duplicates the lifecycle logic"
+      - "Configuring go_source_dirs as empty: deleteGoFiles still walks from root and deletes all .go files"
+
+  - id: 10
+    title: Two-path issue execution
+    decision: |
+      We support two complementary paths for executing a GitHub issue epic. The automated
+      path (mage generator:start/run/stop) suits fully-specified work where Claude proposes
+      and executes tasks autonomously. The interactive path (/git-issue-pop + /do-work) suits
+      work where human review of the decomposition or intermediate results adds value.
+    benefits:
+      - Automated path maximizes throughput for well-understood tasks
+      - Interactive path allows review and correction between sub-issues
+      - Both paths use the same GitHub issue model and git worktree isolation, so switching
+        between them requires no tooling changes
+    alternatives_rejected:
+      - "Single path only: automated path loses human review; interactive path loses throughput"
+
 technology_choices:
   - component: Language
     technology: Go 1.25
@@ -505,8 +552,8 @@ technology_choices:
     technology: git (worktrees, tags, branches)
     purpose: Isolation, lifecycle tracking, and merge
   - component: Issue tracking
-    technology: Beads (bd CLI)
-    purpose: Git-backed task management via JSONL
+    technology: GitHub Issues (gh CLI)
+    purpose: Task management via GitHub REST API; labels encode generation and status
   - component: AI execution
     technology: Claude Code (CLI)
     purpose: Code generation and task execution

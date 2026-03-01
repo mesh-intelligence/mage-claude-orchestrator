@@ -100,6 +100,13 @@ requirements:
       - R9.3: resolveBranch must return an error listing all branches when multiple exist
       - R9.4: resolveBranch must return the current branch when no generation branches exist
 
+  R10:
+    title: Library Mode
+    items:
+      - R10.1: When generation.preserve_sources is true, GeneratorStart must not delete Go source files and must not reinitialize go.mod; branch creation, start-tag, and initial commit must still proceed
+      - R10.2: When generation.preserve_sources is true, GeneratorStop must not call cleanGoSources on the base branch after merge; the merge, version tagging, and history cleanup must still proceed
+      - R10.3: generation.preserve_sources defaults to false; repos whose Go source is the generated output keep all existing behaviour unchanged
+
 non_goals:
   - This PRD does not define what happens inside measure or stitch cycles (see prd003)
   - This PRD does not define multi-generation concurrency (one generation at a time)
@@ -114,3 +121,6 @@ acceptance_criteria:
   - GeneratorReset returns to a clean main-only state
   - GeneratorList shows active, merged, and abandoned generations
   - GeneratorSwitch commits work and changes branches safely
+  - When preserve_sources is true, GeneratorStart does not delete Go source files or reinitialize go.mod
+  - When preserve_sources is true, GeneratorStop does not reset Go sources on the base branch after merge
+  - preserve_sources defaults to false; existing behaviour is unchanged when false

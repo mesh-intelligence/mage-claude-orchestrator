@@ -133,6 +133,89 @@ git branch --show-current  # should show gh-<number>-<slug>
 
 The main repo stays on `main` throughout.
 
+## Phase 4b -- Generator Mode (Alternative)
+
+Use this phase instead of Phase 4 when the user explicitly requests autonomous execution
+(e.g. "use generator mode", "run this automatically", or passes `--generator`).
+
+The generator mode drives `mage generator:start/run` rather than creating GitHub sub-issues
+manually. Claude proposes tasks autonomously via `cobbler:measure` and executes them via
+`cobbler:stitch`. The interactive path (Phase 4) is the default.
+
+### Prerequisites
+
+Before starting, verify the following in the repo's `configuration.yaml`:
+
+```yaml
+cobbler:
+  issues_repo: <owner>/<repo>     # must match current repo
+claude:
+  args:
+    - --dangerously-skip-permissions
+    - -p
+    # other required args
+```
+
+For library repos where Go source must not be deleted, also confirm:
+
+```yaml
+generation:
+  preserve_sources: true
+```
+
+Verify Claude credentials exist:
+
+```bash
+ls .secrets/claude.json  # or the configured token file
+```
+
+### Steps
+
+1. Ensure the main repo is on `main` and the worktree is clean:
+
+   ```bash
+   git checkout main
+   ```
+
+2. Start a generation from the current branch:
+
+   ```bash
+   mage generator:start
+   ```
+
+   This creates a `generation-YYYY-MM-DD-HH-MM-SS` branch and (unless `preserve_sources`
+   is true) resets Go sources. Note the generation branch name printed in the output.
+
+3. Run autonomous measure+stitch cycles:
+
+   ```bash
+   mage generator:run
+   ```
+
+   Claude proposes tasks via measure and executes them via stitch. Runs continue until
+   no open issues remain or the configured cycle limit is reached. Monitor progress in
+   the log output.
+
+4. If the run is interrupted, resume it:
+
+   ```bash
+   mage generator:resume
+   ```
+
+5. When `generator:run` reports completion (no open issues), the generation branch holds
+   all the work. Proceed to **Phase 5** using the generation branch as the feature branch:
+   set `<slug>` to the generation branch name (e.g. `generation-2026-03-01-10-00-00`)
+   and substitute it for `gh-<number>-<slug>` in Phase 5 steps.
+
+### Tradeoff Summary
+
+| | Interactive (Phase 4) | Generator (Phase 4b) |
+| -- | -- | -- |
+| Decomposition | Claude reads issue, proposes sub-issues | Claude proposes tasks autonomously via measure |
+| Review opportunity | Before execution (sub-issues visible on GitHub) | After execution (PR review) |
+| Execution | Agent runs /do-work per sub-issue | Claude runs stitch autonomously |
+| Best for | Tasks needing decomposition review | Well-specified epics with clear specs |
+
 ## Phase 5 -- Open a Pull Request
 
 For the **single-issue path**, trigger Phase 5 when the work is complete (no sub-issue count to check).

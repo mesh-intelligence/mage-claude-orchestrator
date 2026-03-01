@@ -16,6 +16,7 @@ const (
 	binGit      = "git"
 	binBd       = "bd"
 	binClaude   = "claude"
+	binGh       = "gh"
 	binGo       = "go"
 	binLint     = "golangci-lint"
 	binMage     = "mage"

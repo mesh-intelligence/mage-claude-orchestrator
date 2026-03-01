@@ -77,7 +77,7 @@ func (o *Orchestrator) GeneratorResume() error {
 	}
 
 	logf("resume: recovering stale tasks")
-	ghRepo, _ := detectGitHubRepo(wtBase, o.cfg)
+	ghRepo, _ := detectGitHubRepo(".", o.cfg)
 	if err := o.recoverStaleTasks(branch, wtBase, ghRepo, branch); err != nil {
 		logf("resume: recoverStaleTasks warning: %v", err)
 	}
@@ -731,12 +731,26 @@ func (o *Orchestrator) GeneratorReset() error {
 	}
 
 	wtBase := worktreeBasePath()
-	ghRepo, _ := detectGitHubRepo(wtBase, o.cfg)
+	ghRepo, _ := detectGitHubRepo(".", o.cfg)
 	genBranches := o.listGenerationBranches()
 	if len(genBranches) > 0 {
 		logf("generator:reset: removing task branches and worktrees")
 		for _, gb := range genBranches {
 			recoverStaleBranches(gb, wtBase, ghRepo)
+		}
+	}
+
+	if ghRepo != "" {
+		logf("generator:reset: closing GitHub issues")
+		for _, gb := range genBranches {
+			if err := closeGenerationIssues(ghRepo, gb); err != nil {
+				logf("generator:reset: close issues warning for %s: %v", gb, err)
+			}
+		}
+		// Close issues created on main (handles repos where measure ran on main,
+		// such as test repos that run cobbler:measure without a generation branch).
+		if err := closeGenerationIssues(ghRepo, "main"); err != nil {
+			logf("generator:reset: close issues warning for main: %v", err)
 		}
 	}
 

@@ -66,14 +66,15 @@ func TestCollectConsistencyDetails_AllFields(t *testing.T) {
 		OrphanedTestSuites:        []string{"test-rel99.0"},
 		BrokenTouchpoints:         []string{"uc001->prd-missing"},
 		UseCasesNotInRoadmap:      []string{"rel01.0-uc099"},
-		SchemaErrors:              []string{"bad-field.yaml"},
-		ConstitutionDrift:         []string{"design.yaml"},
+		SchemaErrors:              []string{"bad-field.yaml"},   // excluded from details
+		ConstitutionDrift:         []string{"design.yaml"},      // excluded from details
 		BrokenCitations:           []string{"uc001->prd001:R99"},
 	}
 	details := collectConsistencyDetails(r)
 
-	if len(details) != 8 {
-		t.Fatalf("got %d details, want 8", len(details))
+	// SchemaErrors and ConstitutionDrift are excluded (prd003 R11.2).
+	if len(details) != 6 {
+		t.Fatalf("got %d details, want 6", len(details))
 	}
 
 	// Verify prefixes to ensure correct categorization.
@@ -83,8 +84,6 @@ func TestCollectConsistencyDetails_AllFields(t *testing.T) {
 		"orphaned test suite:",
 		"broken touchpoint:",
 		"use case not in roadmap:",
-		"schema error:",
-		"constitution drift:",
 		"broken citation:",
 	}
 	for i, prefix := range prefixes {
@@ -96,13 +95,89 @@ func TestCollectConsistencyDetails_AllFields(t *testing.T) {
 
 func TestCollectConsistencyDetails_MultiplePerField(t *testing.T) {
 	r := &AnalyzeResult{
-		OrphanedPRDs:   []string{"prd-a", "prd-b"},
-		SchemaErrors:   []string{"err1", "err2", "err3"},
+		OrphanedPRDs:    []string{"prd-a", "prd-b"},
+		SchemaErrors:    []string{"err1", "err2", "err3"}, // excluded from details
 		BrokenCitations: []string{"cite1"},
 	}
 	details := collectConsistencyDetails(r)
-	if len(details) != 6 {
-		t.Errorf("got %d details, want 6", len(details))
+	// SchemaErrors excluded; 2 orphaned + 1 citation = 3 (prd003 R11.2).
+	if len(details) != 3 {
+		t.Errorf("got %d details, want 3", len(details))
+	}
+}
+
+// --- collectDefects ---
+
+func TestCollectDefects_Empty(t *testing.T) {
+	r := &AnalyzeResult{}
+	defects := collectDefects(r)
+	if len(defects) != 0 {
+		t.Errorf("got %d defects, want 0", len(defects))
+	}
+}
+
+func TestCollectDefects_SchemaAndDrift(t *testing.T) {
+	r := &AnalyzeResult{
+		SchemaErrors:      []string{"docs/VISION.yaml: type mismatch at line 31"},
+		ConstitutionDrift: []string{"design.yaml"},
+		OrphanedPRDs:      []string{"prd-x"}, // must NOT appear in defects
+	}
+	defects := collectDefects(r)
+
+	if len(defects) != 2 {
+		t.Fatalf("got %d defects, want 2", len(defects))
+	}
+	if !strings.HasPrefix(defects[0], "schema error: ") {
+		t.Errorf("defects[0] = %q, want prefix 'schema error: '", defects[0])
+	}
+	if !strings.HasPrefix(defects[1], "constitution drift: ") {
+		t.Errorf("defects[1] = %q, want prefix 'constitution drift: '", defects[1])
+	}
+}
+
+func TestCollectDefects_ExcludedFromConsistencyDetails(t *testing.T) {
+	// Schema errors and constitution drift must not appear in ConsistencyDetails.
+	r := &AnalyzeResult{
+		SchemaErrors:      []string{"docs/VISION.yaml: err"},
+		ConstitutionDrift: []string{"design.yaml"},
+	}
+	details := collectConsistencyDetails(r)
+	defects := collectDefects(r)
+
+	if len(details) != 0 {
+		t.Errorf("ConsistencyDetails should be empty, got %v", details)
+	}
+	if len(defects) != 2 {
+		t.Errorf("Defects should have 2 entries, got %d", len(defects))
+	}
+}
+
+func TestAnalysisDocDefectsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "analysis.yaml")
+
+	doc := &AnalysisDoc{
+		ConsistencyErrors: 1,
+		ConsistencyDetails: []string{"orphaned PRD: prd-x"},
+		Defects:           []string{"schema error: docs/VISION.yaml: bad field"},
+	}
+
+	if err := writeAnalysisDoc(doc, path); err != nil {
+		t.Fatalf("writeAnalysisDoc: %v", err)
+	}
+
+	loaded := loadAnalysisDoc(dir)
+	if loaded == nil {
+		t.Fatal("loadAnalysisDoc returned nil")
+	}
+	if len(loaded.Defects) != 1 {
+		t.Errorf("Defects len = %d, want 1", len(loaded.Defects))
+	}
+	if loaded.Defects[0] != doc.Defects[0] {
+		t.Errorf("Defects[0] = %q, want %q", loaded.Defects[0], doc.Defects[0])
+	}
+	if len(loaded.ConsistencyDetails) != 1 {
+		t.Errorf("ConsistencyDetails len = %d, want 1", len(loaded.ConsistencyDetails))
 	}
 }
 

@@ -640,9 +640,9 @@ func (o *Orchestrator) PrepareTestRepo(module, version, orchestratorRoot string)
 	}
 
 	// Remove development artifacts from the copied source. Module
-	// sources may include .beads/, .cobbler/, or other local state
+	// sources may include .cobbler/ or other local state
 	// directories that interfere with a clean test environment.
-	for _, artifact := range []string{dirBeads, dirCobbler} {
+	for _, artifact := range []string{dirCobbler} {
 		p := filepath.Join(repoDir, artifact)
 		if _, err := os.Stat(p); err == nil {
 			logf("prepareTestRepo: removing artifact %s", artifact)

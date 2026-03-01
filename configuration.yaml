@@ -33,7 +33,6 @@ generation:
     cleanup_dirs: []
 cobbler:
     dir: .cobbler/
-    beads_dir: .beads/
     issues_repo: petar-djukic/cobbler-scaffold
     max_stitch_issues: 0
     max_stitch_issues_per_cycle: 10

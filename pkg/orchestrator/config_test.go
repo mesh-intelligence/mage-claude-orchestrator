@@ -97,9 +97,6 @@ func TestLoadConfig_AppliesDefaults(t *testing.T) {
 	if cfg.Cobbler.Dir != ".cobbler/" {
 		t.Errorf("Cobbler.Dir default: got %q, want \".cobbler/\"", cfg.Cobbler.Dir)
 	}
-	if cfg.Cobbler.BeadsDir != ".beads/" {
-		t.Errorf("Cobbler.BeadsDir default: got %q, want \".beads/\"", cfg.Cobbler.BeadsDir)
-	}
 	if cfg.Cobbler.MaxStitchIssuesPerCycle != 10 {
 		t.Errorf("MaxStitchIssuesPerCycle default: got %d, want 10", cfg.Cobbler.MaxStitchIssuesPerCycle)
 	}

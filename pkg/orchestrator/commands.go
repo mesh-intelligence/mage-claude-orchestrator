@@ -26,7 +26,6 @@ const (
 // Directory and file path constants.
 const (
 	dirMagefiles = "magefiles"
-	dirBeads     = ".beads"
 	dirCobbler   = ".cobbler"
 )
 

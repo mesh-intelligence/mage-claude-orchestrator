@@ -30,7 +30,7 @@ var executionConstitution string
 //go:embed constitutions/go-style.yaml
 var goStyleConstitution string
 
-// Stitch picks ready tasks from beads and invokes Claude to execute them.
+// Stitch picks ready tasks from GitHub Issues and invokes Claude to execute them.
 // Reads all options from Config.
 func (o *Orchestrator) Stitch() error {
 	_, err := o.RunStitch()
